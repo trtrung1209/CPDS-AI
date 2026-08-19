@@ -7,8 +7,7 @@ from src.utils import get_next_run_dir, save_result
 
 def preprocess_audio(audio_path, sr=16000, duration=2.0):
     """
-    Tiền xử lý âm thanh: Trích xuất Mel-Spectrogram 
-    đúng như cấu trúc đã train trên Kaggle.
+    Extract a Mel spectrogram using the same shape as Kaggle training.
     """
     audio_path = Path(audio_path)
     if not audio_path.is_file():
@@ -29,7 +28,7 @@ def preprocess_audio(audio_path, sr=16000, duration=2.0):
     # Normalize
     mel_spec_db = (mel_spec_db - mel_spec_db.min()) / (mel_spec_db.max() - mel_spec_db.min() + 1e-6)
     
-    # Shape: (1, 1, 128, T) cho ONNX
+    # ONNX input shape: (batch, channel, mel_bins, time_steps)
     input_data = np.expand_dims(np.expand_dims(mel_spec_db, axis=0), axis=0)
     return input_data.astype(np.float32)
 

@@ -42,6 +42,8 @@ runs/
 venv/
 env/
 .env
+.env.*
+!.env.example
 .venv
 ENV/
 env.bak/
@@ -54,3 +56,6 @@ venv.bak/
 
 # Kaggle
 .kaggle/
+
+# Local-only operational notes. This file may contain private paths or reminders.
+LOCAL_NOTES.md

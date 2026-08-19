@@ -2,7 +2,7 @@ import argparse
 import sys
 from pathlib import Path
 
-# Thêm đường dẫn gốc của dự án vào PYTHONPATH để tránh lỗi ModuleNotFoundError
+# Support direct script execution in addition to module execution.
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.utils import get_next_run_dir
@@ -44,8 +44,7 @@ def infer_vision(model_path, image_path):
 
 def verify_vision_model(model_path, image_path):
     """
-    Tải file ONNX YOLOv8 và chạy trên 1 bức ảnh.
-    Lưu ảnh kết quả có vẽ Bounding Box.
+    Load a YOLOv8 ONNX file, run it on one image, and save annotated output.
     """
     import cv2
 

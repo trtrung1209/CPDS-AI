@@ -122,10 +122,10 @@ def test_verify_audio_writes_result_atomically_after_success(monkeypatch, tmp_pa
     assert verify_audio_model("model.onnx", "audio.wav") == expected
     assert json.loads((tmp_path / "audio_verified.json").read_text(encoding="utf-8")) == expected
 
-# MOCK: Bỏ qua test nếu file ONNX chưa được tải về máy
+# This test is skipped only when the optional librosa dependency is unavailable.
 @pytest.fixture
 def dummy_audio_file(tmp_path):
-    # Tạo một file âm thanh rác (.wav) 2 giây
+    # Create a two-second synthetic WAV file.
     file_path = tmp_path / "dummy_audio.wav"
     sr = 16000
     audio_data = (np.random.uniform(-1, 1, int(sr * 2.0)) * 32767).astype(np.int16)
@@ -140,7 +140,7 @@ def test_audio_preprocessing_shape(dummy_audio_file):
     pytest.importorskip("librosa")
     input_data = preprocess_audio(dummy_audio_file)
     
-    # Kích thước phải là (1, 1, 128, T)
+    # Expected shape: (batch, channel, mel_bins, time_steps).
     assert len(input_data.shape) == 4
     assert input_data.shape[0] == 1
     assert input_data.shape[1] == 1
