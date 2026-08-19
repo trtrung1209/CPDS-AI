@@ -1,89 +1,258 @@
-# CPDS-AI (Child Presence Detection System - AI)
+# CPDS-AI
 
-Scientific Research Project: **AI-based Child Presence Detection and Alert System in Vehicles with Remote Firmware Update (FOTA) Capabilities.**
+> **Child Presence Detection System for Vehicles** — an AI research project that combines visual child detection and baby-cry recognition to support alerts for children left in vehicle cabins.
 
-## 1. Overview
-This system utilizes Deep Learning pipelines to monitor and detect the presence of children in vehicle cabins, issuing alerts when a child is left behind.
-The goal is to run two machine learning models concurrently:
-1. **Vision Model:** YOLOv8 (Adult vs. Child classification).
-2. **Audio Model:** Audio classification (Detecting baby cries while filtering out ambient vehicle noise).
+[![CI](https://github.com/trtrung1209/CPDS-AI/actions/workflows/ci_pipeline.yml/badge.svg)](https://github.com/trtrung1209/CPDS-AI/actions/workflows/ci_pipeline.yml)
 
-The entire system will be containerized using Docker and deployed on embedded devices (Raspberry Pi 4, and later Orange Pi 5 with NPU).
+## Overview
 
-## 2. Project Directory Structure
-- `data/`: Contains audio and image datasets (ignored by gitignore to avoid pushing heavy files to GitHub).
-- `notebooks/`: Contains Python scripts/Jupyter Notebooks for model training (can be run on Kaggle/Colab).
-- `src/`: Main source code containing data preprocessing logic, model definitions, and inference.
-  - Inference/training results are automatically saved into directories like `runs/run1`, `runs/run2`, etc.
-- `tests/`: Contains automated test suites using `pytest`; no real model is needed to test the logic.
-- `docker/`: Contains Dockerfiles and environment configurations.
-- `.github/workflows/`: Contains CI/CD scripts for GitHub to automatically run tests on every push/PR.
-- `run_vision_tests.sh`: Helper bash script to automatically run all vision-related tests.
+CPDS-AI is designed as an offline-capable edge-AI pipeline. It combines two independent ONNX models:
 
-## 3. Environment Setup (Local / Laptop)
+| Pipeline | Model | Purpose |
+| --- | --- | --- |
+| Vision | YOLOv8 ONNX | Detects adults and children in a vehicle image or camera stream. |
+| Audio | ResNet18-based ONNX classifier | Distinguishes baby cries from background noise. |
 
-To test the code locally before deploying to the Pi:
+An alarm is triggered only when both signals are positive: a child is detected and the audio classifier identifies a cry. The target deployment path is a Raspberry Pi 4 during development and an Orange Pi 5/NPU for the final edge device.
 
-```bash
-# 1. Create a virtual environment (recommended)
-python3 -m venv venv
-source venv/bin/activate
-
-# 2. Install required libraries
-pip install -r requirements.txt
+```mermaid
+flowchart LR
+    A[Camera image] --> V[Vision ONNX model]
+    B[Microphone audio] --> AU[Audio ONNX model]
+    V --> D{Child detected?}
+    AU --> C{Cry detected?}
+    D --> F[Decision engine]
+    C --> F
+    F -->|Both true| AL[Trigger alert]
+    F -->|Otherwise| LOG[Save inference log]
 ```
 
-## 4. Automated Testing
-The project uses `pytest` to verify the processing pipelines. To run all unit tests, execute the following command at the project root:
-```bash
-python3 -m pytest
+## Key Features
+
+- Real ONNX inference for the combined vision-and-audio decision.
+- Dedicated vision verification with annotated output images.
+- Optional live webcam inference for local development.
+- Kaggle notebooks for training and export workflows.
+- Automated tests with branch coverage enforced at **80% or higher**.
+- Consecutive, readable Markdown reports for local test runs.
+- Docker environment for headless inference deployment.
+
+## Repository Layout
+
+```text
+CPDS-AI/
+├── .github/workflows/       # GitHub Actions CI workflow
+├── docker/                  # Inference Dockerfile
+├── notebooks/               # Kaggle/Colab training notebooks
+├── scripts/                 # Test-report generator
+├── src/
+│   ├── inference/           # ONNX, webcam, and combined inference modules
+│   └── utils.py             # Run-directory and result persistence helpers
+├── tests/                   # Unit, integration, notebook, and performance tests
+├── run_tests.sh             # Full test suite with Markdown report
+├── run_vision_tests.sh      # Vision-focused test and smoke-test helper
+└── requirements.txt
 ```
-The system will automatically scan the `tests/` directory. GitHub Actions also runs this exact command on every push/PR.
 
-## 5. Train and Export Models on Kaggle
-**Audio:** Attach the dataset to the Kaggle notebook and update `DATASET_DIR` in `01_audio_training.ipynb`. The dataset must follow the structure `train/noise`, `train/cry` (and optionally `val/noise`, `val/cry`).
+The following paths are intentionally ignored by Git:
 
-**Vision:** Create a Kaggle Secret named `ROBOFLOW_API_KEY`, grant access to the notebook, and update the workspace/project/version in `02_vision_training.ipynb`. Do not hardcode the API key in the source code. The notebook retrieves `results.save_dir` from Ultralytics, so it does not depend on a hardcoded `runs/` structure.
+- `data/` — datasets and trained model artifacts.
+- `runs/` — inference outputs.
+- `test_reports/` — generated local test reports.
+- `.env*`, `.kaggle/`, `venv/`, and `.venv/` — local configuration and environments.
 
-Download the artifacts after training into the `data/models/` directory (this directory is not committed):
+## Requirements
 
-- `best.onnx` (and `vision_metadata.json`) from `/kaggle/working/artifacts/` of the vision notebook;
-- `audio_model.onnx` and `audio_labels.json` from the audio notebook.
+- Python 3.10 or newer.
+- A virtual environment is recommended.
+- A webcam is required only for the live camera demo.
+- Kaggle GPU is recommended for model training.
 
-## 6. Running ONNX Inference
-Inference uses the real models, no more mock results. Outputs are saved in `runs/run1`, `runs/run2`, etc.:
+## Installation
+
+```bash
+git clone https://github.com/trtrung1209/CPDS-AI.git
+cd CPDS-AI
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+```
+
+## Train and Export Models on Kaggle
+
+### Vision model
+
+1. Create a Kaggle Secret named `ROBOFLOW_API_KEY` in **Add-ons → Secrets**.
+2. Grant the vision notebook access to that secret.
+3. Open `notebooks/02_vision_training.ipynb` in Kaggle and enable a GPU accelerator.
+4. Update the Roboflow workspace, project, and version only if you use a different dataset.
+5. Run all cells.
+
+The notebook trains YOLOv8n, validates the generated ONNX file, then writes these artifacts to `/kaggle/working/artifacts/`:
+
+```text
+best.onnx
+vision_metadata.json
+```
+
+### Audio model
+
+Attach an audio dataset to Kaggle and set `DATASET_DIR` in `notebooks/01_audio_training.ipynb`. The expected layout is:
+
+```text
+cpds-audio/
+├── train/
+│   ├── noise/
+│   └── cry/
+└── val/                    # Optional; an 80/20 split is used when omitted
+    ├── noise/
+    └── cry/
+```
+
+The audio notebook produces:
+
+```text
+audio_model.onnx
+audio_labels.json
+```
+
+### Download model artifacts
+
+Download the generated files and place them locally under `data/models/`:
+
+```text
+data/models/
+├── best.onnx
+├── vision_metadata.json
+├── audio_model.onnx
+└── audio_labels.json
+```
+
+Model files must not be committed to Git.
+
+## Run Inference
+
+### Combined vision and audio inference
 
 ```bash
 python3 -m src.inference.run_inference \
-  --image sample.jpg --audio sample.wav \
+  --image path/to/image.jpg \
+  --audio path/to/audio.wav \
   --vision-model data/models/best.onnx \
   --audio-model data/models/audio_model.onnx \
   --audio-labels data/models/audio_labels.json
 ```
 
-To verify the vision model in real-time using your webcam:
+The result is saved as `runs/runN/inference_log.json`.
+
+### Verify a vision model on one image
+
 ```bash
-python3 src/inference/camera_vision.py --model data/models/best.onnx
+python3 -m src.inference.verify_vision \
+  --model data/models/best.onnx \
+  --image path/to/image.jpg
 ```
 
-Use the helper script to run fast vision unit tests. Add `--image` to run a real ONNX smoke test, or `--camera` for a webcam demo:
+An annotated image is saved under `runs/runN/verified_output.jpg`.
+
+### Verify an audio model
+
 ```bash
+python3 -m src.inference.verify_audio \
+  --model data/models/audio_model.onnx \
+  --audio path/to/audio.wav \
+  --labels data/models/audio_labels.json
+```
+
+### Live webcam inference
+
+Run this natively on the host machine; it needs camera and display access.
+
+```bash
+python3 -m src.inference.camera_vision --model data/models/best.onnx
+```
+
+Press `q` in the preview window to stop.
+
+## Testing and Markdown Reports
+
+The test suite covers inference decisions, ONNX input/output validation, label handling, camera cleanup, notebook validity, and a post-processing performance guard. The full suite enforces 80% branch coverage.
+
+```bash
+# Run all tests with coverage enforcement.
+python3 -m pytest
+
+# Run all tests and create a persistent local Markdown report.
+bash run_tests.sh
+
+# Run the vision unit-test subset and create a Markdown report.
+bash run_vision_tests.sh
+
+# Run the vision subset plus a real ONNX smoke test.
 bash run_vision_tests.sh --image test_anh.jpg data/models/best.onnx
+
+# Run the vision subset plus the webcam demo.
 bash run_vision_tests.sh --camera data/models/best.onnx
 ```
 
-## 7. Docker
-To deploy smoothly on a Pi 4 (using Ubuntu Server), you can build and run Docker:
-```bash
-docker build -t cpds-inference -f docker/Dockerfile.inference .
-docker run --rm -it -v "$(pwd)/data:/app/data:ro" -v "$(pwd)/runs:/app/runs" cpds-inference \
-  python3 -m src.inference.run_inference --image /app/data/sample.jpg --audio /app/data/sample.wav
+Each report-enabled run creates the next numbered directory:
+
+```text
+test_reports/
+├── report1/
+│   ├── test_report.md       # Human-readable English report
+│   ├── test_output.txt      # Raw pytest terminal output
+│   └── results.xml          # JUnit XML for tooling
+├── report2/
+└── reportN/
 ```
 
-## 8. MLOps & Workflow Best Practices
+`test_report.md` includes the final result, pass/fail/skip counts, duration, coverage when available, every test case, and error details for failed runs. Reports stay local because `test_reports/` is ignored by Git.
 
-- **Never rename model files dynamically:** Do not rename your ONNX files (e.g., from `best.onnx` to `test_best.onnx`) just to test them. This is an anti-pattern. Always keep the original names (e.g., `v1.onnx`, `v2.onnx`) and use the `--model` command-line argument to specify which model the script should load.
-- **Docker vs. Native Execution:** 
-  - Scripts that require hardware peripherals (like `camera_vision.py` which needs your webcam) or graphical UI windows should be run **natively** on your host machine (Laptop/PC) during development.
-  - **Docker** is intended for the final headless deployment on the embedded device (Raspberry Pi / Orange Pi). The Docker container perfectly replicates the OS and dependencies without interfering with the host machine.
-- **Test Automation:** Always run `bash run_vision_tests.sh` before committing changes. It automatically verifies both the software logic (`pytest`) and the physical ONNX model execution, ensuring nothing is broken before deployment.
+## Continuous Integration
+
+GitHub Actions runs on every push and pull request targeting `main`.
+
+1. Sets up Python 3.10.
+2. Installs required system and Python dependencies.
+3. Runs `python -m pytest`.
+4. Fails when tests fail or coverage is below 80%.
+
+## Docker
+
+Build the inference image:
+
+```bash
+docker build -t cpds-inference -f docker/Dockerfile.inference .
+```
+
+Run combined inference with local models and a writable results directory:
+
+```bash
+docker run --rm -it \
+  -v "$(pwd)/data:/app/data:ro" \
+  -v "$(pwd)/runs:/app/runs" \
+  cpds-inference \
+  python3 -m src.inference.run_inference \
+    --image /app/data/sample.jpg \
+    --audio /app/data/sample.wav \
+    --vision-model /app/data/models/best.onnx \
+    --audio-model /app/data/models/audio_model.onnx \
+    --audio-labels /app/data/models/audio_labels.json
+```
+
+Do not run the webcam demo inside this Docker image unless the host camera and GUI have been explicitly configured for container access.
+
+## Security and Development Notes
+
+- Store the Roboflow key only in Kaggle Secrets. Never put it in a notebook, `.env` file committed to Git, issue, screenshot, or commit message.
+- Revoke and replace any key that was exposed previously.
+- Keep model versions as separate files and select them with CLI arguments; do not rename production models just to test them.
+- Run `bash run_tests.sh` before pushing changes. Review the generated Markdown report and `git status --short` before committing.
+
+## License
+
+This repository is an academic research project. Add a license file before redistributing the code or trained artifacts.

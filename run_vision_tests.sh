@@ -4,6 +4,13 @@ set -euo pipefail
 MODEL_PATH="data/models/best.onnx"
 RUN_CAMERA=false
 IMAGE_PATH=""
+REPORT_ROOT="test_reports"
+REPORT_NUMBER=1
+while [[ -e "$REPORT_ROOT/report$REPORT_NUMBER" ]]; do
+    ((REPORT_NUMBER += 1))
+done
+REPORT_DIR="$REPORT_ROOT/report$REPORT_NUMBER"
+mkdir -p "$REPORT_DIR"
 
 usage() {
     echo "Usage: bash run_vision_tests.sh [--image PATH] [--camera] [MODEL_PATH]"
@@ -44,7 +51,20 @@ echo "======================================"
 echo ""
 echo "[1] Running vision unit tests..."
 # The focused suite should not be measured against global project coverage.
-python3 -m pytest --no-cov tests/test_vision_model.py
+set +e
+python3 -m pytest --no-cov tests/test_vision_model.py --junitxml="$REPORT_DIR/results.xml" 2>&1 | tee "$REPORT_DIR/test_output.txt"
+TEST_STATUS=${PIPESTATUS[0]}
+set -e
+python3 scripts/generate_test_report.py \
+    --xml "$REPORT_DIR/results.xml" \
+    --output "$REPORT_DIR/test_report.md" \
+    --title "CPDS-AI Vision Test Report" \
+    --command "python3 -m pytest --no-cov tests/test_vision_model.py" \
+    --log "$REPORT_DIR/test_output.txt"
+echo "Markdown report: $REPORT_DIR/test_report.md"
+if [[ "$TEST_STATUS" -ne 0 ]]; then
+    exit "$TEST_STATUS"
+fi
 echo "Vision unit tests passed."
 
 if [[ -n "$IMAGE_PATH" ]]; then
