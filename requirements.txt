@@ -17,3 +17,4 @@ onnxruntime==1.18.1
 
 # Testing
 pytest==8.3.2
+pytest-cov==5.0.0

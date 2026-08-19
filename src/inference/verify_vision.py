@@ -21,14 +21,14 @@ def summarize_detections(names, boxes):
 
 def infer_vision(model_path, image_path):
     """Run YOLO ONNX inference and return the best child-related detection."""
-    from ultralytics import YOLO
-
     model_path = Path(model_path)
     image_path = Path(image_path)
     if not model_path.is_file():
         raise FileNotFoundError(f"Vision model does not exist: {model_path}")
     if not image_path.is_file():
         raise FileNotFoundError(f"Image file does not exist: {image_path}")
+
+    from ultralytics import YOLO
 
     model = YOLO(str(model_path), task="detect")
     results = model(str(image_path), verbose=False)

@@ -10,11 +10,11 @@ def preprocess_audio(audio_path, sr=16000, duration=2.0):
     Tiền xử lý âm thanh: Trích xuất Mel-Spectrogram 
     đúng như cấu trúc đã train trên Kaggle.
     """
-    import librosa
-
     audio_path = Path(audio_path)
     if not audio_path.is_file():
         raise FileNotFoundError(f"Audio file does not exist: {audio_path}")
+
+    import librosa
 
     y, sr = librosa.load(str(audio_path), sr=sr, duration=duration)
     target_length = int(sr * duration)
