@@ -1,56 +1,57 @@
 # CPDS-AI (Child Presence Detection System - AI)
 
-Dự án NCKH: **Hệ thống cảnh báo trẻ em bị bỏ quên trên xe ô tô ứng dụng Trí tuệ nhân tạo (AI) và cơ chế cập nhật firmware từ xa (FOTA).**
+Scientific Research Project: **AI-based Child Presence Detection and Alert System in Vehicles with Remote Firmware Update (FOTA) Capabilities.**
 
-## 1. Giới thiệu (Overview)
-Hệ thống này sử dụng các luồng học sâu (Deep Learning) để giám sát và phát hiện sự hiện diện của trẻ em trong cabin ô tô nhằm cảnh báo khi trẻ bị bỏ quên. 
-Mục tiêu là chạy song song 2 mô hình học máy:
-1. **Vision Model:** YOLOv8 (phát hiện Người lớn vs Trẻ em).
-2. **Audio Model:** Phân loại âm thanh (Phát hiện tiếng khóc trẻ em, lọc các tạp âm nhiễu từ xe ô tô).
+## 1. Overview
+This system utilizes Deep Learning pipelines to monitor and detect the presence of children in vehicle cabins, issuing alerts when a child is left behind.
+The goal is to run two machine learning models concurrently:
+1. **Vision Model:** YOLOv8 (Adult vs. Child classification).
+2. **Audio Model:** Audio classification (Detecting baby cries while filtering out ambient vehicle noise).
 
-Toàn bộ hệ thống sẽ được đóng gói bằng Docker và triển khai lên thiết bị nhúng (Raspberry Pi 4, sau đó là Orange Pi 5 với NPU).
+The entire system will be containerized using Docker and deployed on embedded devices (Raspberry Pi 4, and later Orange Pi 5 with NPU).
 
-## 2. Cấu trúc thư mục dự án
-- `data/`: Chứa dữ liệu âm thanh và hình ảnh (được bỏ qua bởi gitignore để tránh đẩy file nặng lên GitHub).
-- `notebooks/`: Chứa các script Python/Jupyter Notebook để training mô hình (có thể chạy trên Kaggle/Colab).
-- `src/`: Mã nguồn chính chứa logic tiền xử lý dữ liệu, định nghĩa mô hình, và suy luận (inference).
-  - Kết quả suy luận/training sẽ được lưu tự động thành các thư mục `runs/run1`, `runs/run2`...
-- `tests/`: Chứa các bài kiểm thử tự động bằng `pytest`; không cần model thật để kiểm tra logic.
-- `docker/`: Chứa Dockerfile và cấu hình môi trường.
-- `.github/workflows/`: Chứa kịch bản CI/CD để GitHub tự chạy test mỗi khi có code mới.
+## 2. Project Directory Structure
+- `data/`: Contains audio and image datasets (ignored by gitignore to avoid pushing heavy files to GitHub).
+- `notebooks/`: Contains Python scripts/Jupyter Notebooks for model training (can be run on Kaggle/Colab).
+- `src/`: Main source code containing data preprocessing logic, model definitions, and inference.
+  - Inference/training results are automatically saved into directories like `runs/run1`, `runs/run2`, etc.
+- `tests/`: Contains automated test suites using `pytest`; no real model is needed to test the logic.
+- `docker/`: Contains Dockerfiles and environment configurations.
+- `.github/workflows/`: Contains CI/CD scripts for GitHub to automatically run tests on every push/PR.
+- `run_vision_tests.sh`: Helper bash script to automatically run all vision-related tests.
 
-## 3. Cài đặt môi trường (Local / Laptop)
+## 3. Environment Setup (Local / Laptop)
 
-Để chạy thử code trên máy cá nhân trước khi đưa lên Pi:
+To test the code locally before deploying to the Pi:
 
 ```bash
-# 1. Tạo môi trường ảo (khuyến nghị)
+# 1. Create a virtual environment (recommended)
 python3 -m venv venv
 source venv/bin/activate
 
-# 2. Cài đặt các thư viện cần thiết
+# 2. Install required libraries
 pip install -r requirements.txt
 ```
 
-## 4. Chạy kiểm thử tự động (Testing)
-Dự án sử dụng `pytest` để kiểm tra các luồng xử lý. Nếu bạn chưa từng dùng pytest, bạn chỉ cần gõ lệnh sau ở thư mục gốc của dự án:
+## 4. Automated Testing
+The project uses `pytest` to verify the processing pipelines. To run all unit tests, execute the following command at the project root:
 ```bash
 python3 -m pytest
 ```
-Hệ thống sẽ tự quét thư mục `tests/`. GitHub Actions cũng chạy cùng lệnh này trên mỗi push/PR.
+The system will automatically scan the `tests/` directory. GitHub Actions also runs this exact command on every push/PR.
 
-## 5. Train và export model trên Kaggle
-Audio: gắn dataset vào notebook Kaggle rồi cập nhật `DATASET_DIR` trong `01_audio_training.ipynb`. Dataset phải có cấu trúc `train/noise`, `train/cry` (và tùy chọn `val/noise`, `val/cry`).
+## 5. Train and Export Models on Kaggle
+**Audio:** Attach the dataset to the Kaggle notebook and update `DATASET_DIR` in `01_audio_training.ipynb`. The dataset must follow the structure `train/noise`, `train/cry` (and optionally `val/noise`, `val/cry`).
 
-Vision: tạo Kaggle Secret `ROBOFLOW_API_KEY`, cấp quyền cho notebook và cập nhật workspace/project/version trong `02_vision_training.ipynb`. Không ghi API key vào source code. Notebook lấy `results.save_dir` từ Ultralytics nên không phụ thuộc cấu trúc `runs/` của từng phiên bản.
+**Vision:** Create a Kaggle Secret named `ROBOFLOW_API_KEY`, grant access to the notebook, and update the workspace/project/version in `02_vision_training.ipynb`. Do not hardcode the API key in the source code. The notebook retrieves `results.save_dir` from Ultralytics, so it does not depend on a hardcoded `runs/` structure.
 
-Tải các artifact sau khi train về thư mục `data/models/` (thư mục này không được commit):
+Download the artifacts after training into the `data/models/` directory (this directory is not committed):
 
-- `best.onnx` (và `vision_metadata.json`) từ `/kaggle/working/artifacts/` của notebook vision;
-- `audio_model.onnx` và `audio_labels.json` từ notebook audio.
+- `best.onnx` (and `vision_metadata.json`) from `/kaggle/working/artifacts/` of the vision notebook;
+- `audio_model.onnx` and `audio_labels.json` from the audio notebook.
 
-## 6. Chạy suy luận ONNX
-Suy luận dùng model thật, không còn kết quả mock. Kết quả được lưu trong `runs/run1`, `runs/run2`...:
+## 6. Running ONNX Inference
+Inference uses the real models, no more mock results. Outputs are saved in `runs/run1`, `runs/run2`, etc.:
 
 ```bash
 python3 -m src.inference.run_inference \
@@ -60,17 +61,29 @@ python3 -m src.inference.run_inference \
   --audio-labels data/models/audio_labels.json
 ```
 
-Để kiểm tra từng model và lưu output trực quan:
-
+To verify the vision model in real-time using your webcam:
 ```bash
-python3 -m src.inference.verify_vision --model data/models/best.onnx --image sample.jpg
-python3 -m src.inference.verify_audio --model data/models/audio_model.onnx --audio sample.wav --labels data/models/audio_labels.json
+python3 src/inference/camera_vision.py --model data/models/best.onnx
+```
+
+Use the helper script to run fast vision unit tests. Add `--image` to run a real ONNX smoke test, or `--camera` for a webcam demo:
+```bash
+bash run_vision_tests.sh --image test_anh.jpg data/models/best.onnx
+bash run_vision_tests.sh --camera data/models/best.onnx
 ```
 
 ## 7. Docker
-Để triển khai trơn tru trên Pi 4 (dùng Ubuntu Server), bạn có thể build và chạy Docker:
+To deploy smoothly on a Pi 4 (using Ubuntu Server), you can build and run Docker:
 ```bash
 docker build -t cpds-inference -f docker/Dockerfile.inference .
 docker run --rm -it -v "$(pwd)/data:/app/data:ro" -v "$(pwd)/runs:/app/runs" cpds-inference \
   python3 -m src.inference.run_inference --image /app/data/sample.jpg --audio /app/data/sample.wav
 ```
+
+## 8. MLOps & Workflow Best Practices
+
+- **Never rename model files dynamically:** Do not rename your ONNX files (e.g., from `best.onnx` to `test_best.onnx`) just to test them. This is an anti-pattern. Always keep the original names (e.g., `v1.onnx`, `v2.onnx`) and use the `--model` command-line argument to specify which model the script should load.
+- **Docker vs. Native Execution:** 
+  - Scripts that require hardware peripherals (like `camera_vision.py` which needs your webcam) or graphical UI windows should be run **natively** on your host machine (Laptop/PC) during development.
+  - **Docker** is intended for the final headless deployment on the embedded device (Raspberry Pi / Orange Pi). The Docker container perfectly replicates the OS and dependencies without interfering with the host machine.
+- **Test Automation:** Always run `bash run_vision_tests.sh` before committing changes. It automatically verifies both the software logic (`pytest`) and the physical ONNX model execution, ensuring nothing is broken before deployment.
