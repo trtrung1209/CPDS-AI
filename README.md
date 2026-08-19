@@ -15,7 +15,7 @@ Toàn bộ hệ thống sẽ được đóng gói bằng Docker và triển khai
 - `notebooks/`: Chứa các script Python/Jupyter Notebook để training mô hình (có thể chạy trên Kaggle/Colab).
 - `src/`: Mã nguồn chính chứa logic tiền xử lý dữ liệu, định nghĩa mô hình, và suy luận (inference).
   - Kết quả suy luận/training sẽ được lưu tự động thành các thư mục `runs/run1`, `runs/run2`...
-- `tests/`: Chứa các bài kiểm thử tự động bằng `pytest` để đảm bảo code sinh ra không bị lỗi.
+- `tests/`: Chứa các bài kiểm thử tự động bằng `pytest`; không cần model thật để kiểm tra logic.
 - `docker/`: Chứa Dockerfile và cấu hình môi trường.
 - `.github/workflows/`: Chứa kịch bản CI/CD để GitHub tự chạy test mỗi khi có code mới.
 
@@ -35,19 +35,40 @@ pip install -r requirements.txt
 ## 4. Chạy kiểm thử tự động (Testing)
 Dự án sử dụng `pytest` để kiểm tra các luồng xử lý. Nếu bạn chưa từng dùng pytest, bạn chỉ cần gõ lệnh sau ở thư mục gốc của dự án:
 ```bash
-pytest
+python3 -m pytest
 ```
-Hệ thống sẽ tự quét thư mục `tests/` và chạy các kịch bản kiểm tra xem dữ liệu có nạp đúng không, model xuất ra có đúng định dạng không.
+Hệ thống sẽ tự quét thư mục `tests/`. GitHub Actions cũng chạy cùng lệnh này trên mỗi push/PR.
 
-## 5. Chạy suy luận (Inference Demo)
-Các kết quả sẽ được tự động gom vào các folder `run1`, `run2` để bạn dễ so sánh:
+## 5. Train và export model trên Kaggle
+Gắn dataset vào notebook Kaggle rồi cập nhật `DATASET_DIR` trong `01_audio_training.ipynb` và `DATASET_YAML` trong `02_vision_training.ipynb`. Audio dataset phải có cấu trúc `train/noise`, `train/cry` (và tùy chọn `val/noise`, `val/cry`).
+
+Tải các artifact sau khi train về thư mục `data/models/` (thư mục này không được commit):
+
+- `best.onnx` từ notebook vision;
+- `audio_model.onnx` và `audio_labels.json` từ notebook audio.
+
+## 6. Chạy suy luận ONNX
+Suy luận dùng model thật, không còn kết quả mock. Kết quả được lưu trong `runs/run1`, `runs/run2`...:
+
 ```bash
-python src/inference/run_inference.py --audio sample.wav --image sample.jpg
+python3 -m src.inference.run_inference \
+  --image sample.jpg --audio sample.wav \
+  --vision-model data/models/best.onnx \
+  --audio-model data/models/audio_model.onnx \
+  --audio-labels data/models/audio_labels.json
 ```
 
-## 6. Docker (Sắp ra mắt trên Raspberry Pi 4)
+Để kiểm tra từng model và lưu output trực quan:
+
+```bash
+python3 -m src.inference.verify_vision --model data/models/best.onnx --image sample.jpg
+python3 -m src.inference.verify_audio --model data/models/audio_model.onnx --audio sample.wav --labels data/models/audio_labels.json
+```
+
+## 7. Docker
 Để triển khai trơn tru trên Pi 4 (dùng Ubuntu Server), bạn có thể build và chạy Docker:
 ```bash
 docker build -t cpds-inference -f docker/Dockerfile.inference .
-docker run --rm -it cpds-inference
+docker run --rm -it -v "$(pwd)/data:/app/data:ro" -v "$(pwd)/runs:/app/runs" cpds-inference \
+  python3 -m src.inference.run_inference --image /app/data/sample.jpg --audio /app/data/sample.wav
 ```

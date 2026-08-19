@@ -1,50 +1,48 @@
 import argparse
-import sys
-import os
 import json
-from pathlib import Path
 
-# Add project root to sys.path
-sys.path.append(str(Path(__file__).parent.parent.parent))
 from src.utils import get_next_run_dir, save_result
 
-def mock_vision_inference(image_path):
-    """
-    Simulates YOLOv8 Vision inference.
-    """
-    return {"class": "Child", "confidence": 0.95}
 
-def mock_audio_inference(audio_path):
-    """
-    Simulates CNN Audio inference.
-    """
-    return {"is_crying": True, "confidence": 0.88, "noise_detected": "car_engine"}
+def infer_vision(*args, **kwargs):
+    """Lazy import keeps CLI help and unit tests free from ML dependencies."""
+    from src.inference.verify_vision import infer_vision as implementation
+    return implementation(*args, **kwargs)
 
-def run(image_path, audio_path):
+
+def infer_audio(*args, **kwargs):
+    """Lazy import keeps CLI help and unit tests free from ML dependencies."""
+    from src.inference.verify_audio import infer_audio as implementation
+    return implementation(*args, **kwargs)
+
+def run(image_path, audio_path, vision_model, audio_model, audio_labels=None):
+    """Run both real ONNX models and persist a single alarm decision."""
     print("Starting CPDS-AI Inference...")
-    
-    # 1. Run inferences
-    vision_result = mock_vision_inference(image_path)
-    audio_result = mock_audio_inference(audio_path)
-    
-    # 2. Combine results
+
+    vision_result, _ = infer_vision(vision_model, image_path)
+    audio_result = infer_audio(audio_model, audio_path, audio_labels)
     final_result = {
         "vision": vision_result,
         "audio": audio_result,
-        "alarm_triggered": vision_result["class"] == "Child" and audio_result["is_crying"]
+        "alarm_triggered": vision_result["child_detected"] and audio_result["is_crying"],
     }
-    
-    # 3. Save to next run directory
+
     run_dir = get_next_run_dir()
     print(f"Saving results to {run_dir}...")
-    
     save_result(run_dir, "inference_log.json", json.dumps(final_result, indent=4))
     print("Inference completed successfully!")
+    return final_result
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run CPDS-AI Inference")
-    parser.add_argument("--image", type=str, default="sample.jpg", help="Path to input image")
-    parser.add_argument("--audio", type=str, default="sample.wav", help="Path to input audio")
+    parser.add_argument("--image", required=True, help="Path to input image")
+    parser.add_argument("--audio", required=True, help="Path to input audio")
+    parser.add_argument("--vision-model", default="data/models/best.onnx", help="Path to vision ONNX model")
+    parser.add_argument("--audio-model", default="data/models/audio_model.onnx", help="Path to audio ONNX model")
+    parser.add_argument("--audio-labels", help="Optional path to audio_labels.json exported by training")
     
     args = parser.parse_args()
-    run(args.image, args.audio)
+    try:
+        run(args.image, args.audio, args.vision_model, args.audio_model, args.audio_labels)
+    except (OSError, ValueError, RuntimeError) as error:
+        parser.error(str(error))

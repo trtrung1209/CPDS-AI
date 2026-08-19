@@ -24,5 +24,5 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # Copy project files
 COPY . .
 
-# Default command to run inference
-CMD ["python3", "src/inference/run_inference.py"]
+# Show CLI usage by default. Supply image/audio/model paths via `docker run`.
+CMD ["python3", "-m", "src.inference.run_inference", "--help"]
