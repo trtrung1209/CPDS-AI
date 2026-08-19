@@ -1,5 +1,9 @@
 import argparse
+import sys
 from pathlib import Path
+
+# Thêm đường dẫn gốc của dự án vào PYTHONPATH để tránh lỗi ModuleNotFoundError
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.utils import get_next_run_dir
 

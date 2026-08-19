@@ -40,11 +40,13 @@ python3 -m pytest
 Hệ thống sẽ tự quét thư mục `tests/`. GitHub Actions cũng chạy cùng lệnh này trên mỗi push/PR.
 
 ## 5. Train và export model trên Kaggle
-Gắn dataset vào notebook Kaggle rồi cập nhật `DATASET_DIR` trong `01_audio_training.ipynb` và `DATASET_YAML` trong `02_vision_training.ipynb`. Audio dataset phải có cấu trúc `train/noise`, `train/cry` (và tùy chọn `val/noise`, `val/cry`).
+Audio: gắn dataset vào notebook Kaggle rồi cập nhật `DATASET_DIR` trong `01_audio_training.ipynb`. Dataset phải có cấu trúc `train/noise`, `train/cry` (và tùy chọn `val/noise`, `val/cry`).
+
+Vision: tạo Kaggle Secret `ROBOFLOW_API_KEY`, cấp quyền cho notebook và cập nhật workspace/project/version trong `02_vision_training.ipynb`. Không ghi API key vào source code. Notebook lấy `results.save_dir` từ Ultralytics nên không phụ thuộc cấu trúc `runs/` của từng phiên bản.
 
 Tải các artifact sau khi train về thư mục `data/models/` (thư mục này không được commit):
 
-- `best.onnx` từ notebook vision;
+- `best.onnx` (và `vision_metadata.json`) từ `/kaggle/working/artifacts/` của notebook vision;
 - `audio_model.onnx` và `audio_labels.json` từ notebook audio.
 
 ## 6. Chạy suy luận ONNX
