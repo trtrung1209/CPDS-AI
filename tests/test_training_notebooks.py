@@ -39,6 +39,8 @@ def test_audio_notebook_downloads_esc50_and_excludes_crying_baby():
     assert "convert_to_wav" in source
     assert 'AUDIO_EXTENSIONS = {".wav"}' in source
     assert 'dynamo=False' in source
+    assert 'map_location="cpu"' in source
+    assert 'model = model.cpu().eval()' in source
 
 
 def test_notebooks_are_valid_json_and_contain_no_executed_outputs():
