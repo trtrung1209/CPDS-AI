@@ -12,16 +12,23 @@ from src.inference.verify_audio import infer_audio
 
 
 def record_and_infer(model_path: Path, labels_path: Path | None, duration: float, sample_rate: int) -> dict:
-    """Record one mono sample, infer it, and remove the temporary WAV file."""
+    """Record one mono sample, apply peak normalization, infer it, and remove temp WAV."""
     if duration <= 0 or sample_rate <= 0:
         raise ValueError("Duration and sample rate must be positive.")
 
     recording = sound_device.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype="float32")
     sound_device.wait()
+    recording = recording.flatten()
+
+    # Peak normalization: boost low microphone volume to standard 0.95 peak amplitude
+    max_val = np.max(np.abs(recording))
+    if max_val > 1e-4:
+        recording = (recording / max_val) * 0.95
+
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temporary_file:
         audio_path = Path(temporary_file.name)
     try:
-        write_wav(audio_path, sample_rate, np.asarray(recording))
+        write_wav(audio_path, sample_rate, recording.astype(np.float32))
         return infer_audio(model_path, audio_path, labels_path)
     finally:
         audio_path.unlink(missing_ok=True)

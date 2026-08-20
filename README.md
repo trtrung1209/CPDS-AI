@@ -125,11 +125,16 @@ Saves annotated output image to `runs/runN/verified_output.jpg`.
 ```
 Downloads 20 cry + 20 noise samples into `data/test_audio/`. Converts all to 16kHz WAV.
 
+#### Test a single audio file directly
+```bash
+.venv/bin/python main.py --mode audio --audio path/to/sound.wav
+```
+
 #### Run evaluation metrics (Accuracy, F1, Confusion Matrix)
 ```bash
 .venv/bin/python main.py --mode evaluate
 ```
-Prints a full metrics report and saves JSON to `audio_evaluation_report.json`.
+Runs unit tests + evaluates dataset. Prints report and saves JSON to `test_reports/audio_evaluation_report.json`.
 
 #### Live microphone detection
 ```bash

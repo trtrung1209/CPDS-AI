@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --microphone) INSTALL_MICROPHONE=true ;;
         --audio) INSTALL_AUDIO=true ;;
-        --full) INSTALL_FULL=true ;;
+        --full) INSTALL_FULL=true; INSTALL_MICROPHONE=true ;;
         --recreate) RECREATE=true ;;
         --help|-h) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;

@@ -9,6 +9,7 @@ Usage:
     python main.py                                         # Check system readiness
     python main.py --mode prepare                          # Download test audio data
     python main.py --mode evaluate                         # Run unit tests + dataset evaluation + report
+    python main.py --mode audio --audio Y.wav              # Single audio file inference
     python main.py --mode file --image X.jpg --audio Y.wav # Dual-modal inference
     python main.py --mode camera                           # Live webcam detection
     python main.py --mode mic                              # Live microphone detection
@@ -64,6 +65,18 @@ def _require_audio_deps() -> None:
         sys.exit(1)
 
 
+def _require_vision_deps() -> None:
+    """Fail fast with a helpful message when vision libraries are missing."""
+    try:
+        import cv2
+        import ultralytics
+    except ImportError:
+        print("\n❌ Vision dependencies (opencv-python, ultralytics) are missing.")
+        print("   Fix: bash setup_environment.sh --full")
+        print("   Then: .venv/bin/python main.py --mode camera")
+        sys.exit(1)
+
+
 # ---------------------------------------------------------------------------
 # Mode handlers
 # ---------------------------------------------------------------------------
@@ -75,6 +88,7 @@ def mode_check() -> None:
         print("\nAvailable commands:")
         print("  python main.py --mode prepare                          # Download test data")
         print("  python main.py --mode evaluate                         # Unit tests + Metrics report")
+        print("  python main.py --mode audio --audio file.wav            # Single audio test")
         print("  python main.py --mode file --image X.jpg --audio Y.wav # Dual inference")
         print("  python main.py --mode camera                           # Live webcam")
         print("  python main.py --mode mic                              # Live microphone")
@@ -110,7 +124,6 @@ def mode_evaluate() -> None:
     
     try:
         import pytest
-        # Run pytest programmatically on tests/
         pytest_args = [str(PROJECT_ROOT / "tests"), "-v", "--no-cov"]
         exit_code = pytest.main(pytest_args)
         if exit_code == 0:
@@ -155,7 +168,6 @@ def mode_evaluate() -> None:
     print(f"  Actual CRY      {cm[1][0]:<17} {cm[1][1]}")
     print("=" * 50)
 
-    # Save reports
     report_dir = PROJECT_ROOT / "test_reports"
     report_dir.mkdir(exist_ok=True)
     report_path = report_dir / "audio_evaluation_report.json"
@@ -163,8 +175,30 @@ def mode_evaluate() -> None:
     print(f"\n📄 Full JSON report saved: {report_path}")
 
 
+def mode_audio(audio_path: str) -> None:
+    """Run audio inference on a single audio file."""
+    _require_audio_deps()
+
+    from src.inference.verify_audio import infer_audio
+
+    result = infer_audio(AUDIO_MODEL, Path(audio_path))
+    print("\n" + "=" * 50)
+    print("🔊 AUDIO INFERENCE RESULT")
+    print("=" * 50)
+    print(f"  File        : {audio_path}")
+    print(f"  Is Crying   : {result['is_crying']}")
+    print(f"  Confidence  : {result['confidence']:.4f}")
+    probs = result['probabilities']
+    print(f"  Noise Prob  : {probs['noise']:.4f}")
+    print(f"  Cry Prob    : {probs['cry']:.4f}")
+    label = "🚨 CRY DETECTED" if result['is_crying'] else "💤 NOISE (NORMAL)"
+    print(f"\n  Result: {label}")
+    print("=" * 50)
+
+
 def mode_file(image_path: str, audio_path: str) -> None:
     """Run dual-modal inference on one image + one audio file."""
+    _require_vision_deps()
     _require_audio_deps()
 
     from src.inference.run_inference import run as run_dual
@@ -193,18 +227,20 @@ def mode_file(image_path: str, audio_path: str) -> None:
 
 def mode_camera() -> None:
     """Launch live webcam inference."""
+    _require_vision_deps()
+
     from src.inference.camera_vision import run_camera
     print("📷 Starting live camera inference ...")
     run_camera(model_path=str(VISION_MODEL))
 
 
 def mode_mic() -> None:
-    """Launch live microphone inference."""
+    """Launch live microphone inference with auto peak gain normalization."""
     _require_audio_deps()
 
     from scripts.record_and_infer_audio import record_and_infer
 
-    print("🎤 Starting live microphone inference ...")
+    print("🎤 Starting live microphone inference (Auto Gain Boost Enabled) ...")
     print("   Press Ctrl+C to stop.\n")
     try:
         while True:
@@ -215,7 +251,9 @@ def mode_mic() -> None:
                 sample_rate=16000,
             )
             label = "🚨 CRY DETECTED" if result["is_crying"] else "💤 Noise (normal)"
-            print(f"  → {label}  (cry confidence: {result['confidence']:.3f})")
+            cry_prob = result["probabilities"]["cry"]
+            noise_prob = result["probabilities"]["noise"]
+            print(f"  → {label}  |  Cry: {cry_prob * 100:.1f}%  |  Noise: {noise_prob * 100:.1f}%")
             input("  Press Enter to record again ...")
     except KeyboardInterrupt:
         print("\n👋 Exited microphone test.")
@@ -232,12 +270,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=["check", "prepare", "evaluate", "file", "camera", "mic"],
+        choices=["check", "prepare", "evaluate", "audio", "file", "camera", "mic"],
         default="check",
         help="Operation mode (default: check)",
     )
     parser.add_argument("--image", help="Image path (required for --mode file)")
-    parser.add_argument("--audio", help="Audio path (required for --mode file)")
+    parser.add_argument("--audio", help="Audio path (required for --mode audio/file)")
     args = parser.parse_args()
 
     print(BANNER)
@@ -248,6 +286,10 @@ def main() -> None:
         mode_prepare()
     elif args.mode == "evaluate":
         mode_evaluate()
+    elif args.mode == "audio":
+        if not args.audio:
+            parser.error("--mode audio requires --audio <path_to_wav>.")
+        mode_audio(args.audio)
     elif args.mode == "file":
         if not args.image or not args.audio:
             parser.error("--mode file requires both --image and --audio paths.")
