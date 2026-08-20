@@ -5,6 +5,20 @@ import numpy as np
 
 from src.utils import get_next_run_dir, save_result
 
+
+def validate_audio_runtime():
+    """Return librosa only after its lazy-loaded audio backend has been verified."""
+    try:
+        import librosa
+        from librosa.core import audio as _audio_backend  # noqa: F401
+    except Exception as error:
+        raise RuntimeError(
+            "Audio dependencies could not be imported. Create a virtual environment and install the pinned "
+            "project dependencies with: python3 -m pip install -r requirements.txt"
+        ) from error
+    return librosa
+
+
 def preprocess_audio(audio_path, sr=16000, duration=2.0):
     """
     Extract a Mel spectrogram using the same shape as Kaggle training.
@@ -13,7 +27,7 @@ def preprocess_audio(audio_path, sr=16000, duration=2.0):
     if not audio_path.is_file():
         raise FileNotFoundError(f"Audio file does not exist: {audio_path}")
 
-    import librosa
+    librosa = validate_audio_runtime()
 
     y, sr = librosa.load(str(audio_path), sr=sr, duration=duration)
     target_length = int(sr * duration)

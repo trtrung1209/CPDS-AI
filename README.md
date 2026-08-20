@@ -81,6 +81,17 @@ python3 -m pip install --upgrade pip
 python3 -m pip install -r requirements.txt
 ```
 
+Do not install unpinned `librosa`, `numpy`, or `soundfile` into the system Python: their newest releases can be incompatible with the project's audio stack. If a local environment was changed by an unpinned install, recreate it instead of trying to repair packages individually:
+
+```bash
+deactivate 2>/dev/null || true
+rm -rf .venv
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+```
+
 ## Train and Export Models on Kaggle
 
 ### Vision model

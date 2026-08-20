@@ -32,6 +32,7 @@ def test_preprocess_audio_has_stable_onnx_shape_and_normalization(monkeypatch, t
     )()
     fake_librosa.power_to_db = lambda spectrogram, ref: spectrogram
     monkeypatch.setitem(__import__("sys").modules, "librosa", fake_librosa)
+    monkeypatch.setattr("src.inference.verify_audio.validate_audio_runtime", lambda: fake_librosa)
     audio_path = tmp_path / "audio.wav"
     audio_path.touch()
 
@@ -137,7 +138,11 @@ def dummy_audio_file(tmp_path):
     return str(file_path)
 
 def test_audio_preprocessing_shape(dummy_audio_file):
-    pytest.importorskip("librosa")
+    try:
+        import librosa
+        from librosa.core import audio as _audio_backend  # noqa: F401
+    except Exception as error:
+        pytest.skip(f"Audio runtime is unavailable in this environment: {error}")
     input_data = preprocess_audio(dummy_audio_file)
     
     # Expected shape: (batch, channel, mel_bins, time_steps).

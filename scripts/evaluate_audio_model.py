@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-from src.inference.verify_audio import infer_audio
+from src.inference.verify_audio import infer_audio, validate_audio_runtime
 
 
 SUPPORTED_EXTENSIONS = {".wav", ".flac", ".mp3", ".m4a", ".ogg"}
@@ -25,6 +25,9 @@ def evaluate_model(model_path: Path, test_dir: Path, labels_path: Path | None = 
         raise FileNotFoundError(f"Audio model does not exist: {model_path}")
     if not test_dir.is_dir():
         raise FileNotFoundError(f"Evaluation directory does not exist: {test_dir}")
+
+    # Fail fast for broken audio environments instead of recording the same import failure per file.
+    validate_audio_runtime()
 
     y_true, y_pred, failures = [], [], []
     for class_index, class_name in enumerate(CLASS_NAMES):
