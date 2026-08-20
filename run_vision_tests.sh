@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts/shell_helpers.sh"
+require_project_venv
+cd "$PROJECT_ROOT"
+
 MODEL_PATH="data/models/yolov8n-adult-child.onnx"
 RUN_CAMERA=false
 IMAGE_PATH=""
-REPORT_ROOT="test_reports"
-REPORT_NUMBER=1
-while [[ -e "$REPORT_ROOT/report$REPORT_NUMBER" ]]; do
-    ((REPORT_NUMBER += 1))
-done
-REPORT_DIR="$REPORT_ROOT/report$REPORT_NUMBER"
-mkdir -p "$REPORT_DIR"
+REPORT_DIR="$(next_report_dir)"
 
 usage() {
     echo "Usage: bash run_vision_tests.sh [--image PATH] [--camera] [MODEL_PATH]"
@@ -52,16 +50,10 @@ echo ""
 echo "[1] Running vision unit tests..."
 # The focused suite should not be measured against global project coverage.
 set +e
-python3 -m pytest --no-cov tests/test_vision_model.py --junitxml="$REPORT_DIR/results.xml" 2>&1 | tee "$REPORT_DIR/test_output.txt"
+"$PYTHON_BIN" -m pytest --no-cov tests/test_vision_model.py --junitxml="$REPORT_DIR/results.xml" 2>&1 | tee "$REPORT_DIR/test_output.txt"
 TEST_STATUS=${PIPESTATUS[0]}
 set -e
-python3 scripts/generate_test_report.py \
-    --xml "$REPORT_DIR/results.xml" \
-    --output "$REPORT_DIR/test_report.md" \
-    --title "CPDS-AI Vision Test Report" \
-    --command "python3 -m pytest --no-cov tests/test_vision_model.py" \
-    --log "$REPORT_DIR/test_output.txt"
-echo "Markdown report: $REPORT_DIR/test_report.md"
+write_pytest_report "$REPORT_DIR" "CPDS-AI Vision Test Report" ".venv/bin/python -m pytest --no-cov tests/test_vision_model.py"
 if [[ "$TEST_STATUS" -ne 0 ]]; then
     exit "$TEST_STATUS"
 fi
@@ -70,11 +62,19 @@ echo "Vision unit tests passed."
 if [[ -n "$IMAGE_PATH" ]]; then
     echo ""
     echo "[2] Running ONNX smoke test on: $IMAGE_PATH"
-    python3 -m src.inference.verify_vision --model "$MODEL_PATH" --image "$IMAGE_PATH"
+    "$PYTHON_BIN" -c "import cv2, ultralytics" >/dev/null 2>&1 || {
+        echo "Vision smoke tests require the full environment. Run: bash setup_environment.sh --full --recreate" >&2
+        exit 1
+    }
+    "$PYTHON_BIN" -m src.inference.verify_vision --model "$MODEL_PATH" --image "$IMAGE_PATH"
 elif [[ "$RUN_CAMERA" == true ]]; then
     echo ""
     echo "[2] Launching live camera inference..."
-    python3 -m src.inference.camera_vision --model "$MODEL_PATH"
+    "$PYTHON_BIN" -c "import cv2, ultralytics" >/dev/null 2>&1 || {
+        echo "Camera inference requires the full environment. Run: bash setup_environment.sh --full --recreate" >&2
+        exit 1
+    }
+    "$PYTHON_BIN" -m src.inference.camera_vision --model "$MODEL_PATH"
 else
     echo ""
     echo "[2] Model smoke test skipped. Use --image PATH or --camera to run $MODEL_PATH."

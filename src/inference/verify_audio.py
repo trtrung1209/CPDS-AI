@@ -65,11 +65,11 @@ def load_labels(labels_path=None):
 
 def infer_audio(model_path, audio_path, labels_path=None):
     """Run ONNX audio inference and return probabilities with explicit labels."""
-    import onnxruntime as ort
-
     model_path = Path(model_path)
     if not model_path.is_file():
         raise FileNotFoundError(f"Audio model does not exist: {model_path}")
+
+    import onnxruntime as ort
 
     session = ort.InferenceSession(str(model_path))
     input_data = preprocess_audio(audio_path)

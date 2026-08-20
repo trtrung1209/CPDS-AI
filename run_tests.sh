@@ -1,29 +1,19 @@
 #!/usr/bin/env bash
-set -uo pipefail
+set -euo pipefail
 
-REPORT_ROOT="test_reports"
-REPORT_NUMBER=1
-while [[ -e "$REPORT_ROOT/report$REPORT_NUMBER" ]]; do
-    ((REPORT_NUMBER += 1))
-done
-REPORT_DIR="$REPORT_ROOT/report$REPORT_NUMBER"
-mkdir -p "$REPORT_DIR"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts/shell_helpers.sh"
+require_project_venv
+cd "$PROJECT_ROOT"
 
-TEST_COMMAND="python3 -m pytest"
+REPORT_DIR="$(next_report_dir)"
+TEST_COMMAND=".venv/bin/python -m pytest"
 echo "Running the full CPDS-AI test suite."
 echo "Report directory: $REPORT_DIR"
 
 set +e
-python3 -m pytest --junitxml="$REPORT_DIR/results.xml" 2>&1 | tee "$REPORT_DIR/test_output.txt"
+"$PYTHON_BIN" -m pytest --junitxml="$REPORT_DIR/results.xml" 2>&1 | tee "$REPORT_DIR/test_output.txt"
 TEST_STATUS=${PIPESTATUS[0]}
 set -e
 
-python3 scripts/generate_test_report.py \
-    --xml "$REPORT_DIR/results.xml" \
-    --output "$REPORT_DIR/test_report.md" \
-    --title "CPDS-AI Full Test Report" \
-    --command "$TEST_COMMAND" \
-    --log "$REPORT_DIR/test_output.txt"
-
-echo "Markdown report: $REPORT_DIR/test_report.md"
+write_pytest_report "$REPORT_DIR" "CPDS-AI Full Test Report" "$TEST_COMMAND"
 exit "$TEST_STATUS"

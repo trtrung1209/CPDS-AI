@@ -222,21 +222,25 @@ Press `q` in the preview window to stop.
 The test suite covers inference decisions, ONNX input/output validation, label handling, camera cleanup, notebook validity, and a post-processing performance guard. The full suite enforces 80% branch coverage.
 
 ```bash
-# Run all tests with coverage enforcement.
-python3 -m pytest
+# One-time lightweight setup for all unit tests.
+bash setup_environment.sh
 
-# Run all tests and create a persistent local Markdown report.
+# Full suite: coverage gate + reportN/ Markdown report.
 bash run_tests.sh
 
-# Run the vision unit-test subset and create a Markdown report.
+# Vision unit tests + report. Add --image for a real ONNX smoke test.
 bash run_vision_tests.sh
+bash run_vision_tests.sh --image path/to/image.jpg
 
-# Run the vision subset plus a real ONNX smoke test.
-bash run_vision_tests.sh --image test_anh.jpg data/models/yolov8n-adult-child.onnx
+# Audio unit tests + report. Add --audio for an ONNX smoke test.
+bash run_audio_tests.sh
+bash run_audio_tests.sh --audio path/to/audio.wav
 
-# Run the vision subset plus the webcam demo.
-bash run_vision_tests.sh --camera data/models/yolov8n-adult-child.onnx
+# Evaluate the ONNX audio model against labelled data.
+bash run_audio_tests.sh --evaluate data/test_audio
 ```
+
+All shell scripts use `.venv/bin/python` exclusively. They never use the system Python, so a globally installed or incompatible `librosa`/`numba` stack cannot affect project tests. Run `bash setup_environment.sh --audio --recreate` before audio ONNX smoke tests/evaluation, or `bash setup_environment.sh --full --recreate` before real vision ONNX smoke tests/webcam inference. Add `--microphone` to install optional microphone dependencies. Use `--recreate` only when you intentionally want to rebuild `.venv`.
 
 Each report-enabled run creates the next numbered directory:
 
