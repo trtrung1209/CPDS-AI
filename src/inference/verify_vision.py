@@ -58,7 +58,7 @@ def verify_vision_model(model_path, image_path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Verify YOLOv8 ONNX Model")
-    parser.add_argument("--model", type=str, required=True, help="Path to best.onnx")
+    parser.add_argument("--model", type=str, required=True, help="Path to vision ONNX model")
     parser.add_argument("--image", type=str, required=True, help="Path to test image")
     
     args = parser.parse_args()

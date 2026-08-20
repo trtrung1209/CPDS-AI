@@ -23,8 +23,22 @@ def test_vision_export_uses_training_result_not_a_hard_coded_runs_path():
 
     assert "results.save_dir" in source
     assert "best_weights = run_dir / \"weights\" / \"best.pt\"" in source
-    assert "artifacts_dir / \"best.onnx\"" in source
+    assert "artifacts_dir / \"yolov8n-adult-child.onnx\"" in source
     assert "onnx.checker.check_model" in source
+
+
+def test_audio_notebook_downloads_esc50_and_excludes_crying_baby():
+    source = notebook_source("01_audio_training.ipynb")
+
+    assert "esc50.csv" in source
+    assert "crying_baby" in source
+    assert "VEHICLE_NOISE_CATEGORIES" in source
+    assert "random.seed(SEED)" in source
+    assert "dataset_manifest.json" in source
+    assert 'git clone --depth 1 https://github.com/karolpiczak/ESC-50.git' in source
+    assert "convert_to_wav" in source
+    assert 'AUDIO_EXTENSIONS = {".wav"}' in source
+    assert 'dynamo=False' in source
 
 
 def test_notebooks_are_valid_json_and_contain_no_executed_outputs():

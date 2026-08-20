@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODEL_PATH="data/models/best.onnx"
+MODEL_PATH="data/models/yolov8n-adult-child.onnx"
 RUN_CAMERA=false
 IMAGE_PATH=""
 REPORT_ROOT="test_reports"

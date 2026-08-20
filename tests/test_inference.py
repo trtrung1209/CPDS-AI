@@ -1,4 +1,4 @@
-from src.inference.run_inference import infer_audio, infer_vision, run
+from src.inference.run_inference import DEFAULT_CRY_THRESHOLD, DEFAULT_VISION_THRESHOLD, infer_audio, infer_vision, run
 import json
 import pytest
 
@@ -18,7 +18,8 @@ def test_run_combines_real_inference_results(monkeypatch, tmp_path):
     assert result["alarm_triggered"] is True
     saved_result = json.loads((tmp_path / "inference_log.json").read_text(encoding="utf-8"))
     assert saved_result == result
-    assert set(result) == {"vision", "audio", "alarm_triggered"}
+    assert set(result) == {"vision", "audio", "alarm_triggered", "thresholds"}
+    assert result["thresholds"] == {"vision": DEFAULT_VISION_THRESHOLD, "cry": DEFAULT_CRY_THRESHOLD}
 
 
 def test_run_does_not_trigger_alarm_without_child(monkeypatch, tmp_path):
@@ -26,7 +27,7 @@ def test_run_does_not_trigger_alarm_without_child(monkeypatch, tmp_path):
         "src.inference.run_inference.infer_vision",
         lambda *_args: ({"class": "Adult", "confidence": 0.95, "child_detected": False}, object()),
     )
-    monkeypatch.setattr("src.inference.run_inference.infer_audio", lambda *_args: {"is_crying": True})
+    monkeypatch.setattr("src.inference.run_inference.infer_audio", lambda *_args: {"is_crying": True, "confidence": 0.95})
     monkeypatch.setattr("src.inference.run_inference.get_next_run_dir", lambda: tmp_path)
 
     assert run("image.jpg", "audio.wav", "vision.onnx", "audio.onnx")["alarm_triggered"] is False
@@ -39,12 +40,35 @@ def test_run_does_not_trigger_alarm_without_child(monkeypatch, tmp_path):
 def test_alarm_requires_both_signals(monkeypatch, tmp_path, child_detected, is_crying, expected):
     monkeypatch.setattr(
         "src.inference.run_inference.infer_vision",
-        lambda *_args: ({"child_detected": child_detected}, object()),
+        lambda *_args: ({"child_detected": child_detected, "confidence": 0.95}, object()),
     )
-    monkeypatch.setattr("src.inference.run_inference.infer_audio", lambda *_args: {"is_crying": is_crying})
+    monkeypatch.setattr("src.inference.run_inference.infer_audio", lambda *_args: {"is_crying": is_crying, "confidence": 0.95})
     monkeypatch.setattr("src.inference.run_inference.get_next_run_dir", lambda: tmp_path)
 
     assert run("image.jpg", "audio.wav", "vision.onnx", "audio.onnx")["alarm_triggered"] is expected
+
+
+def test_alarm_requires_both_confidences_to_meet_thresholds(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "src.inference.run_inference.infer_vision",
+        lambda *_args: ({"child_detected": True, "confidence": 0.59}, object()),
+    )
+    monkeypatch.setattr("src.inference.run_inference.infer_audio", lambda *_args: {"is_crying": True, "confidence": 0.95})
+    monkeypatch.setattr("src.inference.run_inference.get_next_run_dir", lambda: tmp_path)
+
+    assert run("image.jpg", "audio.wav", "vision.onnx", "audio.onnx")["alarm_triggered"] is False
+
+
+def test_invalid_confidence_threshold_is_rejected(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "src.inference.run_inference.infer_vision",
+        lambda *_args: ({"child_detected": True, "confidence": 0.95}, object()),
+    )
+    monkeypatch.setattr("src.inference.run_inference.infer_audio", lambda *_args: {"is_crying": True, "confidence": 0.95})
+    monkeypatch.setattr("src.inference.run_inference.get_next_run_dir", lambda: tmp_path)
+
+    with pytest.raises(ValueError, match="between 0.0 and 1.0"):
+        run("image.jpg", "audio.wav", "vision.onnx", "audio.onnx", vision_threshold=1.1)
 
 
 def test_failed_vision_inference_does_not_write_partial_result(monkeypatch, tmp_path):

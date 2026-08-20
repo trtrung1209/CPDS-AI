@@ -5,7 +5,8 @@ librosa==0.10.1
 soundfile==0.12.1
 
 # Computer Vision & Machine Learning
-opencv-python-headless==4.10.0.84
+# Desktop build supports the local webcam preview; it also works for headless inference.
+opencv-python==4.10.0.84
 ultralytics==8.2.70
 torch==2.4.0
 torchaudio==2.4.0

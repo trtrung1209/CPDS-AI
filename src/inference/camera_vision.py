@@ -40,7 +40,7 @@ def run_camera(model_path, camera_index=0):
 
 if __name__ == "__main__":  # pragma: no cover
     parser = argparse.ArgumentParser(description="Run live camera inference with a YOLOv8 ONNX model.")
-    parser.add_argument("--model", default="data/models/best.onnx", help="Path to best.onnx")
+    parser.add_argument("--model", default="data/models/yolov8n-adult-child.onnx", help="Path to vision ONNX model")
     parser.add_argument("--camera-index", type=int, default=0, help="Camera device index (default: 0)")
 
     args = parser.parse_args()

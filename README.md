@@ -94,13 +94,13 @@ python3 -m pip install -r requirements.txt
 The notebook trains YOLOv8n, validates the generated ONNX file, then writes these artifacts to `/kaggle/working/artifacts/`:
 
 ```text
-best.onnx
+yolov8n-adult-child.onnx
 vision_metadata.json
 ```
 
 ### Audio model
 
-Attach an audio dataset to Kaggle and set `DATASET_DIR` in `notebooks/01_audio_training.ipynb`. The expected layout is:
+The notebook builds its working dataset under `/kaggle/working/cpds-audio` automatically. Its generated layout is:
 
 ```text
 cpds-audio/
@@ -112,11 +112,14 @@ cpds-audio/
     └── cry/
 ```
 
-The audio notebook produces:
+Enable Internet before running the audio notebook. It shallow-clones [Donate-a-cry](https://github.com/gveres/donateacry-corpus) and [ESC-50](https://github.com/karolpiczak/ESC-50), selects vehicle-relevant ESC-50 categories, excludes `crying_baby`, and writes a reproducibility manifest. No Kaggle Input dataset is required.
+
+The audio notebook writes these files to `/kaggle/working/artifacts/`:
 
 ```text
 audio_model.onnx
 audio_labels.json
+audio_dataset_manifest.json
 ```
 
 ### Download model artifacts
@@ -125,7 +128,7 @@ Download the generated files and place them locally under `data/models/`:
 
 ```text
 data/models/
-├── best.onnx
+├── yolov8n-adult-child.onnx
 ├── vision_metadata.json
 ├── audio_model.onnx
 └── audio_labels.json
@@ -141,7 +144,7 @@ Model files must not be committed to Git.
 python3 -m src.inference.run_inference \
   --image path/to/image.jpg \
   --audio path/to/audio.wav \
-  --vision-model data/models/best.onnx \
+  --vision-model data/models/yolov8n-adult-child.onnx \
   --audio-model data/models/audio_model.onnx \
   --audio-labels data/models/audio_labels.json
 ```
@@ -152,7 +155,7 @@ The result is saved as `runs/runN/inference_log.json`.
 
 ```bash
 python3 -m src.inference.verify_vision \
-  --model data/models/best.onnx \
+  --model data/models/yolov8n-adult-child.onnx \
   --image path/to/image.jpg
 ```
 
@@ -172,7 +175,7 @@ python3 -m src.inference.verify_audio \
 Run this natively on the host machine; it needs camera and display access.
 
 ```bash
-python3 -m src.inference.camera_vision --model data/models/best.onnx
+python3 -m src.inference.camera_vision --model data/models/yolov8n-adult-child.onnx
 ```
 
 Press `q` in the preview window to stop.
@@ -192,10 +195,10 @@ bash run_tests.sh
 bash run_vision_tests.sh
 
 # Run the vision subset plus a real ONNX smoke test.
-bash run_vision_tests.sh --image test_anh.jpg data/models/best.onnx
+bash run_vision_tests.sh --image test_anh.jpg data/models/yolov8n-adult-child.onnx
 
 # Run the vision subset plus the webcam demo.
-bash run_vision_tests.sh --camera data/models/best.onnx
+bash run_vision_tests.sh --camera data/models/yolov8n-adult-child.onnx
 ```
 
 Each report-enabled run creates the next numbered directory:
@@ -239,7 +242,7 @@ docker run --rm -it \
   python3 -m src.inference.run_inference \
     --image /app/data/sample.jpg \
     --audio /app/data/sample.wav \
-    --vision-model /app/data/models/best.onnx \
+    --vision-model /app/data/models/yolov8n-adult-child.onnx \
     --audio-model /app/data/models/audio_model.onnx \
     --audio-labels /app/data/models/audio_labels.json
 ```
