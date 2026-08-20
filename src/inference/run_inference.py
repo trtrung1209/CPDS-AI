@@ -1,5 +1,10 @@
 import argparse
 import json
+import sys
+from pathlib import Path
+
+# Support direct script execution in addition to module execution.
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from src.utils import get_next_run_dir, save_result
 

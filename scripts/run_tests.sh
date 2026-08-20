@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts/shell_helpers.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/shell_helpers.sh"
 require_project_venv
 cd "$PROJECT_ROOT"
 

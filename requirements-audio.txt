@@ -1,5 +1,6 @@
 # Audio ONNX smoke tests and evaluation. Includes the unit-test profile.
 -r requirements-test.txt
+setuptools<70
 librosa==0.10.1
 soundfile==0.12.1
 numba==0.60.0
