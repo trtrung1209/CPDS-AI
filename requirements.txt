@@ -3,6 +3,7 @@ numpy==1.26.4
 pandas==2.2.2
 librosa==0.10.1
 soundfile==0.12.1
+scikit-learn==1.5.2
 
 # Computer Vision & Machine Learning
 # Desktop build supports the local webcam preview; it also works for headless inference.

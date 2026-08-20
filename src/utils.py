@@ -1,5 +1,5 @@
-import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 def get_next_run_dir(base_dir="runs"):
     """
@@ -19,9 +19,13 @@ def get_next_run_dir(base_dir="runs"):
 
 def save_result(run_dir, filename, content):
     """
-    Saves a result file into the specified run directory.
+    Atomically save a UTF-8 result file into the specified run directory.
     """
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
     file_path = run_dir / filename
-    with open(file_path, "w") as f:
-        f.write(content)
+    with NamedTemporaryFile("w", encoding="utf-8", dir=run_dir, delete=False) as temporary_file:
+        temporary_file.write(content)
+        temporary_path = Path(temporary_file.name)
+    temporary_path.replace(file_path)
     return file_path

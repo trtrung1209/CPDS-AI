@@ -59,7 +59,7 @@ The following paths are intentionally ignored by Git:
 - `data/` — datasets and trained model artifacts.
 - `runs/` — inference outputs.
 - `test_reports/` — generated local test reports.
-- `.env*`, `.kaggle/`, `venv/`, and `.venv/` — local configuration and environments.
+- `.env*`, `.kaggle/`, `venv/`, `.venv/`, and GitNexus caches — local configuration, environments, and tooling.
 
 ## Requirements
 
@@ -167,6 +167,32 @@ An annotated image is saved under `runs/runN/verified_output.jpg`.
 python3 -m src.inference.verify_audio \
   --model data/models/audio_model.onnx \
   --audio path/to/audio.wav \
+  --labels data/models/audio_labels.json
+```
+
+### Evaluate an audio model
+
+Prepare a deterministic, balanced evaluation set from the public sources (Internet access and `ffmpeg` are required):
+
+```bash
+python3 scripts/prepare_audio_evaluation_data.py --overwrite
+python3 scripts/evaluate_audio_model.py \
+  --model data/models/audio_model.onnx \
+  --labels data/models/audio_labels.json \
+  --test-dir data/test_audio \
+  --report audio_evaluation_report.json
+```
+
+The evaluation command produces a machine-readable JSON report with accuracy, per-class precision/recall/F1, a confusion matrix, and per-file failures.
+
+### Test microphone inference
+
+This optional local-only tool needs microphone dependencies:
+
+```bash
+python3 -m pip install -r requirements-microphone.txt
+python3 scripts/record_and_infer_audio.py \
+  --model data/models/audio_model.onnx \
   --labels data/models/audio_labels.json
 ```
 

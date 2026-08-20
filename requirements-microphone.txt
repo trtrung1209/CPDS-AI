@@ -1,0 +1,3 @@
+# Optional dependencies for scripts/record_and_infer_audio.py
+sounddevice==0.5.1
+scipy==1.14.1

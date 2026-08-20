@@ -62,10 +62,12 @@ def test_alarm_requires_both_confidences_to_meet_thresholds(monkeypatch, tmp_pat
 def test_invalid_confidence_threshold_is_rejected(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "src.inference.run_inference.infer_vision",
-        lambda *_args: ({"child_detected": True, "confidence": 0.95}, object()),
+        lambda *_args: (_ for _ in ()).throw(AssertionError("Inference must not start for invalid thresholds")),
     )
-    monkeypatch.setattr("src.inference.run_inference.infer_audio", lambda *_args: {"is_crying": True, "confidence": 0.95})
-    monkeypatch.setattr("src.inference.run_inference.get_next_run_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        "src.inference.run_inference.infer_audio",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("Inference must not start for invalid thresholds")),
+    )
 
     with pytest.raises(ValueError, match="between 0.0 and 1.0"):
         run("image.jpg", "audio.wav", "vision.onnx", "audio.onnx", vision_threshold=1.1)

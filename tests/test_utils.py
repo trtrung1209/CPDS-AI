@@ -1,5 +1,3 @@
-import os
-import shutil
 from pathlib import Path
 from src.utils import get_next_run_dir, save_result
 
@@ -21,3 +19,4 @@ def test_save_result(tmp_path):
     with open(file_path, "r") as f:
         content = f.read()
     assert content == "Child Detected: True"
+    assert list(run_dir.glob("tmp*")) == []

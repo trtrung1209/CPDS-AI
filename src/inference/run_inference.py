@@ -39,12 +39,13 @@ def run(
     cry_threshold=DEFAULT_CRY_THRESHOLD,
 ):
     """Run both real ONNX models and persist a single alarm decision."""
+    if not 0.0 <= vision_threshold <= 1.0 or not 0.0 <= cry_threshold <= 1.0:
+        raise ValueError("Confidence thresholds must be between 0.0 and 1.0.")
+
     print("Starting CPDS-AI Inference...")
 
     vision_result, _ = infer_vision(vision_model, image_path)
     audio_result = infer_audio(audio_model, audio_path, audio_labels)
-    if not 0.0 <= vision_threshold <= 1.0 or not 0.0 <= cry_threshold <= 1.0:
-        raise ValueError("Confidence thresholds must be between 0.0 and 1.0.")
     final_result = {
         "vision": vision_result,
         "audio": audio_result,
