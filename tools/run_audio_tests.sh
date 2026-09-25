@@ -52,7 +52,7 @@ if [[ -n "$EVALUATION_DIR" ]]; then
         echo "Audio evaluation requires the audio environment. Run: bash setup_environment.sh --audio --recreate" >&2
         exit 1
     }
-    "$PYTHON_BIN" scripts/evaluate_audio_model.py --model "$MODEL_PATH" --labels "$LABELS_PATH" --test-dir "$EVALUATION_DIR"
+    "$PYTHON_BIN" -m src.data_prep.evaluate_audio_model --model "$MODEL_PATH" --labels "$LABELS_PATH" --test-dir "$EVALUATION_DIR"
 fi
 
 echo "Audio checks completed successfully."

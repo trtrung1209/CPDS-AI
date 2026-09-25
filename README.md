@@ -1,285 +1,268 @@
-# CPDS-AI — Child Protection & Distress Detection System
+# CPDS-AI
 
-An edge-deployable, dual-modal AI system that detects children via camera (YOLOv8) and recognises baby cries via microphone (ResNet18), triggering real-time alerts when a child is in distress.
+> **Child Presence Detection System for Vehicles** — an AI research project that combines visual child detection and baby-cry recognition to support alerts for children left in vehicle cabins.
 
-## Architecture
+[![CI](https://github.com/trtrung1209/CPDS-AI/actions/workflows/ci_pipeline.yml/badge.svg)](https://github.com/trtrung1209/CPDS-AI/actions/workflows/ci_pipeline.yml)
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                       CPDS-AI                            │
-│                                                          │
-│  ┌─────────────┐    ┌──────────────┐    ┌────────────┐  │
-│  │   Camera     │    │  Microphone   │    │  main.py   │  │
-│  │  (Webcam)    │    │   (Mic)       │    │ (Unified   │  │
-│  └──────┬───────┘    └──────┬────────┘    │  Entry     │  │
-│         │                   │             │  Point)    │  │
-│         ▼                   ▼             └─────┬──────┘  │
-│  ┌─────────────┐    ┌──────────────┐            │         │
-│  │  YOLOv8n    │    │  ResNet18    │            │         │
-│  │  (Vision)   │    │  (Audio)     │◄───────────┘         │
-│  │  .onnx      │    │  .onnx       │                      │
-│  └──────┬───────┘    └──────┬────────┘                    │
-│         │                   │                             │
-│         ▼                   ▼                             │
-│  ┌──────────────────────────────────┐                    │
-│  │     Alarm Decision Engine        │                    │
-│  │  Child detected + Crying = 🚨    │                    │
-│  └──────────────────────────────────┘                    │
-└──────────────────────────────────────────────────────────┘
-```
+## Overview
 
-## Quick Start
+CPDS-AI is designed as an offline-capable edge-AI pipeline. It combines two independent ONNX models:
 
-```bash
-# 1. Clone
-git clone https://github.com/trtrung1209/CPDS-AI.git && cd CPDS-AI
+| Pipeline | Model                   | Purpose                                                          |
+| -------- | ----------------------- | ---------------------------------------------------------------- |
+| Vision   | YOLOv8 ONNX<br />(INT8) | Detects adults and children in a vehicle image or camera stream. |
+| Audio    | AudioCNN ONNX (INT8)    | Distinguishes baby cries from background noise.                  |
 
-# 2. Setup environment
-bash setup_environment.sh --full --microphone
+An alarm is triggered only when both signals are positive: a child is detected and the audio classifier identifies a cry. The target deployment path is a Raspberry Pi 4 during development and an Orange Pi 5/NPU for the final edge device.
 
-# 3. Check readiness
-.venv/bin/python main.py
+```mermaid
+flowchart LR
+    A[Camera image] --> V[Vision ONNX model]
+    B[Microphone audio] --> AU[Audio ONNX model]
+    V --> D{Child detected?}
+    AU --> C{Cry detected?}
+    D --> F[Decision engine]
+    C --> F
+    F -->|Both true| AL[Trigger alert]
+    F -->|Otherwise| LOG[Save inference log]
 ```
 
----
+## Key Features
 
-## Prerequisites
+- Real ONNX inference for the combined vision-and-audio decision.
+- Dedicated vision verification with annotated output images.
+- Optional live webcam inference for local development.
+- Periodic, unattended microphone recording to conserve battery on edge devices.
+- Kaggle notebooks for training and export workflows.
+- Automated tests with branch coverage enforced at **80% or higher**.
+- Consecutive, readable Markdown reports for local test runs.
+- Docker environment for headless inference deployment.
 
-| Requirement | Version | Notes |
-|---|---|---|
-| Python | 3.10+ | Tested on 3.10, 3.12 |
-| Git | any | For cloning datasets |
-| ffmpeg | any | Audio format conversion |
+## Audio Subsystem Enhancements
 
-```bash
-# Ubuntu / Raspberry Pi OS
-sudo apt-get install -y ffmpeg python3-venv
+The audio classification pipeline has been highly optimized for edge deployment (e.g., Orange Pi 5):
 
-# macOS
-brew install ffmpeg
-```
+- **Model Architecture**: Transitioned to a custom, lightweight `AudioCNN` (~98K parameters) specifically designed for 128x63 mel-spectrograms.
+- **Quantization**: The ONNX model is exported using Static INT8 Quantization, reducing the file size by over 70% (from ~42MB to ~10MB) to accelerate loading times and reduce memory footprint.
+- **Battery Optimization**: The microphone inference mode now utilizes a periodic listening cycle (e.g., record 2s, idle 3s). This significantly extends the operation window on backup battery power while remaining highly responsive to prolonged sounds like baby cries.
+- **Data Integrity**: The evaluation data pipeline strictly separates the holdout validation set from the training pool using deterministic shuffling to prevent data leakage. Background noise clips (ESC-50) are dynamically processed using a sliding window to capture the loudest RMS segment rather than a random crop.
 
----
+## Repository Layout
 
-## Environment Setup
-
-```bash
-# Audio only (librosa, onnxruntime, scikit-learn)
-bash setup_environment.sh --audio
-
-# Full (audio + vision + webcam)
-bash setup_environment.sh --full
-
-# Full + microphone recording
-bash setup_environment.sh --full --microphone
-
-# Recreate from scratch
-bash setup_environment.sh --full --microphone --recreate
-```
-
-After setup, always use the venv Python:
-```bash
-.venv/bin/python main.py        # Linux / macOS / Pi
-.venv\Scripts\python main.py    # Windows
-```
-
----
-
-## Usage (All via `main.py`)
-
-### Check System
-```bash
-.venv/bin/python main.py
-```
-Verifies both ONNX models are present in `data/models/`.
-
----
-
-### 👁️ Vision Testing
-
-#### Test on a single image
-```bash
-.venv/bin/python main.py --mode file --image path/to/photo.jpg --audio path/to/sound.wav
-```
-The vision model draws bounding boxes and classifies each person as `adult` or `child`.
-
-#### Live webcam detection
-```bash
-.venv/bin/python main.py --mode camera
-```
-Opens webcam, draws real-time bounding boxes. Green = Adult, Red = Child. Press **q** to quit.
-
-#### Verify vision model on a single image (standalone)
-```bash
-.venv/bin/python -m src.inference.verify_vision --model data/models/yolov8n-adult-child.onnx --image test.jpg
-```
-Saves annotated output image to `runs/runN/verified_output.jpg`.
-
----
-
-### 🔊 Audio Testing
-
-#### Download test audio data
-```bash
-.venv/bin/python main.py --mode prepare
-```
-Downloads 20 cry + 20 noise samples into `data/test_audio/`. Converts all to 16kHz WAV.
-
-#### Test a single audio file directly
-```bash
-.venv/bin/python main.py --mode audio --audio path/to/sound.wav
-```
-
-#### Run evaluation metrics (Accuracy, F1, Confusion Matrix)
-```bash
-.venv/bin/python main.py --mode evaluate
-```
-Runs unit tests + evaluates dataset. Prints report and saves JSON to `test_reports/audio_evaluation_report.json`.
-
-#### Live microphone detection
-```bash
-.venv/bin/python main.py --mode mic
-```
-Records 2-second clips and classifies as `cry` or `noise`. Press **Ctrl+C** to stop.
-
-#### Verify audio model on a single file (standalone)
-```bash
-.venv/bin/python -m src.inference.verify_audio --model data/models/audio_model.onnx --audio test.wav
-```
-Saves result JSON to `runs/runN/audio_verified.json`.
-
----
-
-### 🚨 Dual-Modal Inference (Vision + Audio combined)
-
-```bash
-.venv/bin/python main.py --mode file --image photo.jpg --audio sound.wav
-```
-Runs **both** models and outputs an alarm decision:
-- `🚨 ALARM TRIGGERED` = Child detected **AND** baby is crying
-- `💤 No alarm` = Normal situation
-
----
-
-## Project Structure
-
-```
+```text
 CPDS-AI/
-├── main.py                     # 🎯 Unified entry point
-├── setup_environment.sh        # 🔧 Creates .venv with correct deps
-├── README.md                   # 📖 This file
-│
-├── data/
-│   ├── models/
-│   │   ├── yolov8n-adult-child.onnx   # Vision model (YOLOv8)
-│   │   └── audio_model.onnx           # Audio model (ResNet18)
-│   └── test_audio/                    # Generated by --mode prepare
-│       ├── cry/                       # Baby cry WAV samples
-│       └── noise/                     # Environmental noise WAV samples
-│
+├── .github/workflows/       # GitHub Actions CI workflow
+├── docker/                  # Inference Dockerfile
+├── notebooks/               # Kaggle/Colab training notebooks
+├── scripts/                 # Test-report generator
 ├── src/
-│   ├── inference/
-│   │   ├── run_inference.py       # Dual-modal inference engine
-│   │   ├── verify_audio.py        # Audio preprocessing + ONNX inference
-│   │   ├── verify_vision.py       # YOLO inference + summarization
-│   │   └── camera_vision.py       # Live webcam loop
-│   └── utils.py                   # Run directory management
-│
-├── scripts/
-│   ├── evaluate_audio_model.py    # Batch metrics with sklearn
-│   ├── prepare_audio_evaluation_data.py  # Download + convert test data
-│   ├── record_and_infer_audio.py  # Mic recording + inference
-│   ├── run_tests.sh               # Full pytest suite
-│   ├── run_vision_tests.sh        # Vision-specific tests
-│   ├── run_audio_tests.sh         # Audio-specific tests
-│   ├── shell_helpers.sh           # Shared bash utilities
-│   └── generate_test_report.py    # Report generation
-│
-├── notebooks/
-│   ├── 01_audio_training.ipynb    # Train audio on Kaggle
-│   └── 02_vision_training.ipynb   # Train vision on Kaggle
-│
-├── tests/                         # pytest unit tests
-├── docker/                        # Docker configs
-│
-├── requirements.txt               # Full deps
-├── requirements-audio.txt         # Audio-only deps
-├── requirements-test.txt          # Minimal test deps
-└── requirements-microphone.txt    # Mic recording deps
+│   ├── inference/           # ONNX, webcam, and combined inference modules
+│   └── utils.py             # Run-directory and result persistence helpers
+├── tests/                   # Unit, integration, notebook, and performance tests
+├── run_tests.sh             # Full test suite with Markdown report
+├── run_vision_tests.sh      # Vision-focused test and smoke-test helper
+└── requirements.txt
 ```
 
----
+The following paths are intentionally ignored by Git:
 
-## Deployment
+- `data/` — datasets and trained model artifacts.
+- `runs/` — inference outputs.
+- `test_reports/` — generated local test reports.
+- `.env*`, `.kaggle/`, `venv/`, and `.venv/` — local configuration and environments.
 
-### Raspberry Pi 4 / Orange Pi 5
+## Requirements
 
-**Transfer & Setup:**
+- Python 3.10 or newer.
+- A virtual environment is recommended.
+- A webcam is required only for the live camera demo.
+- Kaggle GPU is recommended for model training.
+
+## Installation
+
 ```bash
-scp -r CPDS-AI/ pi@<PI_IP>:~/CPDS-AI/
-ssh pi@<PI_IP>
-cd ~/CPDS-AI
-sudo apt-get install -y python3-venv ffmpeg
-bash setup_environment.sh --full --microphone
-.venv/bin/python main.py
+git clone https://github.com/trtrung1209/CPDS-AI.git
+cd CPDS-AI
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
 ```
 
-**Run as systemd service (24/7):**
+## Train and Export Models on Kaggle
+
+### Vision model
+
+1. Create a Kaggle Secret named `ROBOFLOW_API_KEY` in **Add-ons → Secrets**.
+2. Grant the vision notebook access to that secret.
+3. Open `notebooks/02_vision_training.ipynb` in Kaggle and enable a GPU accelerator.
+4. Update the Roboflow workspace, project, and version only if you use a different dataset.
+5. Run all cells.
+
+The notebook trains YOLOv8n, validates the generated ONNX file, then writes these artifacts to `/kaggle/working/artifacts/`:
+
+```text
+best.onnx
+vision_metadata.json
+```
+
+### Audio model
+
+Attach an audio dataset to Kaggle and set `DATASET_DIR` in `notebooks/01_audio_training.ipynb`. The expected layout is:
+
+```text
+cpds-audio/
+├── train/
+│   ├── noise/
+│   └── cry/
+└── val/                    # Optional; an 80/20 split is used when omitted
+    ├── noise/
+    └── cry/
+```
+
+The audio notebook produces:
+
+```text
+audio_model.onnx
+audio_labels.json
+```
+
+### Download model artifacts
+
+Download the generated files and place them locally under `data/models/`:
+
+```text
+data/models/
+├── best.onnx
+├── vision_metadata.json
+├── audio_model.onnx
+└── audio_labels.json
+```
+
+Model files must not be committed to Git.
+
+## Run Inference
+
+### Combined vision and audio inference
+
 ```bash
-sudo tee /etc/systemd/system/cpds-ai.service << EOF
-[Unit]
-Description=CPDS-AI Child Protection System
-After=network.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/CPDS-AI
-ExecStart=/home/pi/CPDS-AI/.venv/bin/python main.py --mode mic
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable cpds-ai
-sudo systemctl start cpds-ai
+python3 -m src.inference.run_inference \
+  --image path/to/image.jpg \
+  --audio path/to/audio.wav \
+  --vision-model data/models/best.onnx \
+  --audio-model data/models/audio_model.onnx \
+  --audio-labels data/models/audio_labels.json
 ```
 
-### INT8 Quantization (Orange Pi 5 NPU)
+The result is saved as `runs/runN/inference_log.json`.
+
+### Verify a vision model on one image
+
 ```bash
-python3 -c "
-from rknn.api import RKNN
-rknn = RKNN()
-rknn.config(target_platform='rk3588', quantized_dtype='asymmetric_quantized-8')
-rknn.load_onnx(model='data/models/audio_model.onnx')
-rknn.build(do_quantization=True)
-rknn.export_rknn('data/models/audio_model.rknn')
-"
+python3 -m src.inference.verify_vision \
+  --model data/models/best.onnx \
+  --image path/to/image.jpg
 ```
 
----
+An annotated image is saved under `runs/runN/verified_output.jpg`.
 
-## Training (Re-training)
+### Verify an audio model
 
-Both models are trained on **Kaggle** (free GPU):
+```bash
+python3 -m src.inference.verify_audio \
+  --model data/models/audio_model.onnx \
+  --audio path/to/audio.wav \
+  --labels data/models/audio_labels.json
+```
 
-1. **Audio**: Upload `notebooks/01_audio_training.ipynb` → Run All → Download `audio_model.onnx`
-2. **Vision**: Upload `notebooks/02_vision_training.ipynb` → Run All → Download `yolov8n-adult-child.onnx`
+### Live webcam inference
 
-Place models into `data/models/`.
+Run this natively on the host machine; it needs camera and display access.
 
----
+```bash
+python3 -m src.inference.camera_vision --model data/models/best.onnx
+```
 
-## Tech Stack
+Press `q` in the preview window to stop.
 
-| Component | Technology | Purpose |
-|---|---|---|
-| Vision AI | YOLOv8n (Ultralytics) | Detect adults vs children |
-| Audio AI | ResNet18 (PyTorch → ONNX) | Classify baby cry vs noise |
-| Inference | ONNX Runtime | Cross-platform model execution |
-| Audio Processing | librosa + ffmpeg | Mel-spectrogram extraction |
-| Evaluation | scikit-learn | Precision, Recall, F1, Confusion Matrix |
-| Deployment | systemd | 24/7 edge operation |
+## Testing and Markdown Reports
+
+The test suite covers inference decisions, ONNX input/output validation, label handling, camera cleanup, notebook validity, and a post-processing performance guard. The full suite enforces 80% branch coverage.
+
+```bash
+# Run all tests with coverage enforcement.
+python3 -m pytest
+
+# Run all tests and create a persistent local Markdown report.
+bash run_tests.sh
+
+# Run the vision unit-test subset and create a Markdown report.
+bash run_vision_tests.sh
+
+# Run the vision subset plus a real ONNX smoke test.
+bash run_vision_tests.sh --image test_anh.jpg data/models/best.onnx
+
+# Run the vision subset plus the webcam demo.
+bash run_vision_tests.sh --camera data/models/best.onnx
+```
+
+Each report-enabled run creates the next numbered directory:
+
+```text
+test_reports/
+├── report1/
+│   ├── test_report.md       # Human-readable English report
+│   ├── test_output.txt      # Raw pytest terminal output
+│   └── results.xml          # JUnit XML for tooling
+├── report2/
+└── reportN/
+```
+
+`test_report.md` includes the final result, pass/fail/skip counts, duration, coverage when available, every test case, and error details for failed runs. Reports stay local because `test_reports/` is ignored by Git.
+
+## Continuous Integration
+
+GitHub Actions runs on every push and pull request targeting `main`.
+
+1. Sets up Python 3.10.
+2. Installs required system and Python dependencies.
+3. Runs `python -m pytest`.
+4. Fails when tests fail or coverage is below 80%.
+
+## Docker
+
+Build the inference image:
+
+```bash
+docker build -t cpds-inference -f docker/Dockerfile.inference .
+```
+
+Run combined inference with local models and a writable results directory:
+
+```bash
+docker run --rm -it \
+  -v "$(pwd)/data:/app/data:ro" \
+  -v "$(pwd)/runs:/app/runs" \
+  cpds-inference \
+  python3 -m src.inference.run_inference \
+    --image /app/data/sample.jpg \
+    --audio /app/data/sample.wav \
+    --vision-model /app/data/models/best.onnx \
+    --audio-model /app/data/models/audio_model.onnx \
+    --audio-labels /app/data/models/audio_labels.json
+```
+
+Do not run the webcam demo inside this Docker image unless the host camera and GUI have been explicitly configured for container access.
+
+## Security and Development Notes
+
+- Store the Roboflow key only in Kaggle Secrets. Never put it in a notebook, `.env` file committed to Git, issue, screenshot, or commit message.
+- Revoke and replace any key that was exposed previously.
+- Keep model versions as separate files and select them with CLI arguments; do not rename production models just to test them.
+- Run `bash run_tests.sh` before pushing changes. Review the generated Markdown report and `git status --short` before committing.
+
+## License
+
+This repository is an academic research project. Add a license file before redistributing the code or trained artifacts.

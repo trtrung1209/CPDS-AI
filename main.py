@@ -12,7 +12,8 @@ Usage:
     python main.py --mode audio --audio Y.wav              # Single audio file inference
     python main.py --mode file --image X.jpg --audio Y.wav # Dual-modal inference
     python main.py --mode camera                           # Live webcam detection
-    python main.py --mode mic                              # Live microphone detection
+    python main.py --mode mic                              # Periodic microphone detection (unattended)
+    python main.py --mode mic --idle-seconds 0             # ~Continuous listening (no idle gap), for comparison
 """
 
 import argparse
@@ -32,9 +33,9 @@ VISION_MODEL = PROJECT_ROOT / "data" / "models" / "yolov8n-adult-child.onnx"
 AUDIO_MODEL = PROJECT_ROOT / "data" / "models" / "audio_model.onnx"
 
 BANNER = r"""
-============================================================
-   CPDS-AI: Child Protection & Distress Detection System
-============================================================
+------------------------------------------------------------
+CPDS-AI: Child Protection & Distress Detection System
+------------------------------------------------------------
 """
 
 
@@ -42,14 +43,14 @@ BANNER = r"""
 # Helpers
 # ---------------------------------------------------------------------------
 def _check_models() -> dict[str, bool]:
-    """Return a mapping of model name → exists on disk."""
+    """Return a mapping of model name -> exists on disk."""
     status = {
         "Vision (YOLOv8)": VISION_MODEL.is_file(),
-        "Audio  (ResNet18)": AUDIO_MODEL.is_file(),
+        "Audio  (AudioCNN)": AUDIO_MODEL.is_file(),
     }
     for name, ready in status.items():
-        icon = "✅" if ready else "❌"
-        print(f"  {icon} {name}")
+        state = "[OK]" if ready else "[MISSING]"
+        print(f"  {state:<10} {name}")
     return status
 
 
@@ -59,9 +60,9 @@ def _require_audio_deps() -> None:
         from src.inference.verify_audio import validate_audio_runtime
         validate_audio_runtime()
     except Exception:
-        print("\n❌ Audio dependencies are missing.")
-        print("   Fix: bash setup_environment.sh --audio")
-        print("   Then: .venv/bin/python main.py <your command>")
+        print("\n[ERROR] Audio dependencies are missing.")
+        print("Fix: bash setup_environment.sh --audio")
+        print("Then: .venv/bin/python main.py <your command>")
         sys.exit(1)
 
 
@@ -71,9 +72,9 @@ def _require_vision_deps() -> None:
         import cv2
         import ultralytics
     except ImportError:
-        print("\n❌ Vision dependencies (opencv-python, ultralytics) are missing.")
-        print("   Fix: bash setup_environment.sh --full")
-        print("   Then: .venv/bin/python main.py --mode camera")
+        print("\n[ERROR] Vision dependencies (opencv-python, ultralytics) are missing.")
+        print("Fix: bash setup_environment.sh --full")
+        print("Then: .venv/bin/python main.py --mode camera")
         sys.exit(1)
 
 
@@ -81,28 +82,28 @@ def _require_vision_deps() -> None:
 # Mode handlers
 # ---------------------------------------------------------------------------
 def mode_check() -> None:
-    print("\n🔍 Pre-trained models:")
+    print("[INFO] Checking pre-trained models:")
     status = _check_models()
     if all(status.values()):
-        print("\n✅ System is ready for deployment!")
-        print("\nAvailable commands:")
+        print("\n[OK] System is ready for deployment.\n")
+        print("Available commands:")
         print("  python main.py --mode prepare                          # Download test data")
         print("  python main.py --mode evaluate                         # Unit tests + Metrics report")
-        print("  python main.py --mode audio --audio file.wav            # Single audio test")
+        print("  python main.py --mode audio --audio file.wav           # Single audio test")
         print("  python main.py --mode file --image X.jpg --audio Y.wav # Dual inference")
         print("  python main.py --mode camera                           # Live webcam")
         print("  python main.py --mode mic                              # Live microphone")
     else:
-        print("\n⚠️  Place missing .onnx models into data/models/ first.")
+        print("\n[WARN] Place missing .onnx models into data/models/ first.")
 
 
 def mode_prepare() -> None:
     """Delegate to scripts/prepare_audio_evaluation_data.py."""
-    from scripts.prepare_audio_evaluation_data import prepare_audio_evaluation_data
+    from src.data_prep.prepare_audio_evaluation_data import prepare_audio_evaluation_data
 
     output_dir = PROJECT_ROOT / "data" / "test_audio"
     cache_dir = PROJECT_ROOT / ".cache" / "cpds-ai-audio"
-    print("🚀 Downloading & preparing test audio data ...")
+    print("[INFO] Downloading and preparing test audio data...")
     manifest = prepare_audio_evaluation_data(
         output_dir=output_dir,
         cache_dir=cache_dir,
@@ -110,49 +111,41 @@ def mode_prepare() -> None:
         seed=42,
         overwrite=True,
     )
-    print(f"\n✅ Done! {manifest['cry_count']} cry + {manifest['noise_count']} noise samples")
-    print(f"   Location: {output_dir}")
+    print(f"[OK] Done. {manifest['cry_count']} cry + {manifest['noise_count']} noise samples.")
+    print(f"Location: {output_dir}")
 
 
 def mode_evaluate() -> None:
-    """Run Pytest unit tests first (with green PASSED output), then run dataset evaluation and export reports."""
+    """Run Pytest unit tests first, then run dataset evaluation and export reports."""
     _require_audio_deps()
 
-    print("\n" + "=" * 50)
-    print("🧪 STEP 1: RUNNING UNIT TESTS (PYTEST)")
-    print("=" * 50)
-    
+    print("\n--- STEP 1: UNIT TESTS (PYTEST) ---")
     try:
         import pytest
-        pytest_args = [str(PROJECT_ROOT / "tests"), "-v", "--no-cov"]
+        pytest_args = [str(PROJECT_ROOT / "tests"), "-v", "--no-cov", "-q"]
         exit_code = pytest.main(pytest_args)
         if exit_code == 0:
-            print("✅ All unit tests PASSED successfully!")
+            print("[OK] All unit tests passed.")
         else:
-            print("⚠️ Some unit tests failed. Proceeding with dataset evaluation...")
+            print("[WARN] Some unit tests failed. Proceeding with dataset evaluation...")
     except Exception as error:
-        print(f"⚠️ Pytest execution skipped: {error}")
+        print(f"[WARN] Pytest execution skipped: {error}")
 
-    print("\n" + "=" * 50)
-    print("📊 STEP 2: EVALUATING MODEL ON TEST DATASET")
-    print("=" * 50)
-
-    from scripts.evaluate_audio_model import evaluate_model
+    print("\n--- STEP 2: EVALUATING MODEL ON TEST DATASET ---")
+    from src.data_prep.evaluate_audio_model import evaluate_model
 
     test_dir = PROJECT_ROOT / "data" / "test_audio"
     if not test_dir.is_dir():
-        print("❌ Test data not found. Running auto-prepare first...")
+        print("[FAIL] Test data not found. Running auto-prepare first...")
         mode_prepare()
 
     report = evaluate_model(AUDIO_MODEL, test_dir)
 
-    print("\n" + "=" * 50)
-    print("📊 EVALUATION METRICS REPORT")
-    print("=" * 50)
-    print(f"🎯 Overall Accuracy: {report['accuracy'] * 100:.2f}%")
-    print(f"   Samples evaluated: {report['evaluated_samples']}")
+    print("\n--- EVALUATION METRICS REPORT ---")
+    print(f"Overall Accuracy : {report['accuracy'] * 100:.2f}%")
+    print(f"Samples evaluated: {report['evaluated_samples']}")
     if report["failed_samples"]:
-        print(f"   ⚠️  Failed samples: {len(report['failed_samples'])}")
+        print(f"[WARN] Failed samples: {len(report['failed_samples'])}")
 
     cr = report["classification_report"]
     print(f"\n{'Class':<10} {'Precision':>10} {'Recall':>10} {'F1-Score':>10}")
@@ -162,17 +155,17 @@ def mode_evaluate() -> None:
             print(f"{cls:<10} {cr[cls]['precision']:>10.2f} {cr[cls]['recall']:>10.2f} {cr[cls]['f1-score']:>10.2f}")
 
     cm = report["confusion_matrix"]
-    print(f"\n🧩 Confusion Matrix:")
-    print(f"                 Predicted NOISE   Predicted CRY")
+    print("\nConfusion Matrix:")
+    print("                 Predicted NOISE   Predicted CRY")
     print(f"  Actual NOISE    {cm[0][0]:<17} {cm[0][1]}")
     print(f"  Actual CRY      {cm[1][0]:<17} {cm[1][1]}")
-    print("=" * 50)
+    print("-" * 50)
 
     report_dir = PROJECT_ROOT / "test_reports"
     report_dir.mkdir(exist_ok=True)
     report_path = report_dir / "audio_evaluation_report.json"
     report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(f"\n📄 Full JSON report saved: {report_path}")
+    print(f"[OK] Full JSON report saved: {report_path}")
 
 
 def mode_audio(audio_path: str) -> None:
@@ -182,18 +175,18 @@ def mode_audio(audio_path: str) -> None:
     from src.inference.verify_audio import infer_audio
 
     result = infer_audio(AUDIO_MODEL, Path(audio_path))
-    print("\n" + "=" * 50)
-    print("🔊 AUDIO INFERENCE RESULT")
-    print("=" * 50)
-    print(f"  File        : {audio_path}")
-    print(f"  Is Crying   : {result['is_crying']}")
-    print(f"  Confidence  : {result['confidence']:.4f}")
+    print("\n--- AUDIO INFERENCE RESULT ---")
+    print(f"File        : {audio_path}")
+    print(f"Is Crying   : {result['is_crying']}")
+    print(f"Confidence  : {result['confidence']:.4f}")
+    
     probs = result['probabilities']
-    print(f"  Noise Prob  : {probs['noise']:.4f}")
-    print(f"  Cry Prob    : {probs['cry']:.4f}")
-    label = "🚨 CRY DETECTED" if result['is_crying'] else "💤 NOISE (NORMAL)"
-    print(f"\n  Result: {label}")
-    print("=" * 50)
+    print(f"Noise Prob  : {probs['noise']:.4f}")
+    print(f"Cry Prob    : {probs['cry']:.4f}")
+    
+    label = "ALARM: CRY DETECTED" if result['is_crying'] else "NORMAL: NOISE"
+    print(f"\nResult: {label}")
+    print("-" * 30)
 
 
 def mode_file(image_path: str, audio_path: str) -> None:
@@ -210,19 +203,18 @@ def mode_file(image_path: str, audio_path: str) -> None:
         audio_model=str(AUDIO_MODEL),
     )
 
-    print("\n" + "=" * 50)
-    print("📊 DUAL-MODAL INFERENCE RESULT")
-    print("=" * 50)
+    print("\n--- DUAL-MODAL INFERENCE RESULT ---")
     v = result["vision"]
     a = result["audio"]
-    print(f"  👁️  Child detected : {v['child_detected']}  (confidence: {v['confidence']:.2f})")
-    print(f"  🔊 Baby crying     : {a['is_crying']}  (confidence: {a['confidence']:.2f})")
+    print(f"Child detected : {v['child_detected']} (confidence: {v['confidence']:.2f})")
+    print(f"Baby crying    : {a['is_crying']} (confidence: {a['confidence']:.2f})")
+    
     alarm = result["alarm_triggered"]
     if alarm:
-        print(f"\n  🚨 ALARM TRIGGERED — Child is crying!")
+        print("\nSTATUS: ALARM TRIGGERED - Child is crying!")
     else:
-        print(f"\n  💤 No alarm — situation is normal.")
-    print("=" * 50)
+        print("\nSTATUS: NORMAL - No alarm triggered.")
+    print("-" * 35)
 
 
 def mode_camera() -> None:
@@ -230,33 +222,36 @@ def mode_camera() -> None:
     _require_vision_deps()
 
     from src.inference.camera_vision import run_camera
-    print("📷 Starting live camera inference ...")
+    print("[INFO] Starting live camera inference...")
     run_camera(model_path=str(VISION_MODEL))
 
 
-def mode_mic() -> None:
+def mode_mic(idle_seconds: float = 3.0) -> None:
     """Launch live microphone inference with auto peak gain normalization."""
     _require_audio_deps()
 
-    from scripts.record_and_infer_audio import record_and_infer
+    from src.cli.record_and_infer_audio import listen_periodically
 
-    print("🎤 Starting live microphone inference (Auto Gain Boost Enabled) ...")
-    print("   Press Ctrl+C to stop.\n")
+    print("[INFO] Starting periodic microphone inference (Auto Gain Boost Enabled)...")
+    print(f"[INFO] Cycle: 2.0s record + {idle_seconds:.1f}s idle. Press Ctrl+C to stop.\n")
+
+    def _report(result: dict) -> None:
+        label = "ALARM: CRY DETECTED" if result["is_crying"] else "NORMAL: Noise"
+        cry_prob = result["probabilities"]["cry"]
+        noise_prob = result["probabilities"]["noise"]
+        print(f"[{label}] Cry: {cry_prob * 100:.1f}% | Noise: {noise_prob * 100:.1f}%")
+
     try:
-        while True:
-            result = record_and_infer(
-                model_path=AUDIO_MODEL,
-                labels_path=None,
-                duration=2.0,
-                sample_rate=16000,
-            )
-            label = "🚨 CRY DETECTED" if result["is_crying"] else "💤 Noise (normal)"
-            cry_prob = result["probabilities"]["cry"]
-            noise_prob = result["probabilities"]["noise"]
-            print(f"  → {label}  |  Cry: {cry_prob * 100:.1f}%  |  Noise: {noise_prob * 100:.1f}%")
-            input("  Press Enter to record again ...")
+        listen_periodically(
+            model_path=AUDIO_MODEL,
+            labels_path=None,
+            capture_duration=2.0,
+            idle_seconds=idle_seconds,
+            sample_rate=16000,
+            on_result=_report,
+        )
     except KeyboardInterrupt:
-        print("\n👋 Exited microphone test.")
+        print("\n[INFO] Exited microphone test.")
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +271,8 @@ def main() -> None:
     )
     parser.add_argument("--image", help="Image path (required for --mode file)")
     parser.add_argument("--audio", help="Audio path (required for --mode audio/file)")
+    parser.add_argument("--idle-seconds", type=float, default=3.0,
+                         help="--mode mic only: idle time between recordings")
     args = parser.parse_args()
 
     print(BANNER)
@@ -297,7 +294,7 @@ def main() -> None:
     elif args.mode == "camera":
         mode_camera()
     elif args.mode == "mic":
-        mode_mic()
+        mode_mic(args.idle_seconds)
 
 
 if __name__ == "__main__":

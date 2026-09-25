@@ -34,7 +34,7 @@ write_pytest_report() {
     local report_dir="$1"
     local title="$2"
     local test_command="$3"
-    "$PYTHON_BIN" "$PROJECT_ROOT/scripts/generate_test_report.py" \
+    "$PYTHON_BIN" "$PROJECT_ROOT/src/cli/generate_test_report.py" \
         --xml "$report_dir/results.xml" \
         --output "$report_dir/test_report.md" \
         --title "$title" \
