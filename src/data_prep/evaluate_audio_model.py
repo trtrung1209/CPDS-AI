@@ -38,6 +38,7 @@ def evaluate_model(model_path: Path, test_dir: Path, labels_path: Path | None = 
             try:
                 result = infer_audio(model_path, audio_path, labels_path)
             except (OSError, RuntimeError, ValueError) as error:
+                print(f"Error evaluating {audio_path}: {repr(error)}")
                 failures.append({"file": str(audio_path), "error": str(error)})
                 continue
             y_true.append(class_index)

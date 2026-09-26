@@ -6,7 +6,10 @@ require_project_venv
 cd "$PROJECT_ROOT"
 
 MODEL_PATH="data/models/audio_model.onnx"
-LABELS_PATH="data/models/audio_labels.json"
+LABELS_PATH=""
+if [[ -f "data/models/audio_labels.json" ]]; then
+    LABELS_PATH="data/models/audio_labels.json"
+fi
 AUDIO_PATH=""
 EVALUATION_DIR=""
 REPORT_DIR="$(next_report_dir)"
@@ -43,7 +46,11 @@ if [[ -n "$AUDIO_PATH" ]]; then
         echo "Audio ONNX smoke tests require the audio environment. Run: bash setup_environment.sh --audio --recreate" >&2
         exit 1
     }
-    "$PYTHON_BIN" -m src.inference.verify_audio --model "$MODEL_PATH" --audio "$AUDIO_PATH" --labels "$LABELS_PATH"
+    PYTHON_ARGS=("--model" "$MODEL_PATH" "--audio" "$AUDIO_PATH")
+    if [[ -n "$LABELS_PATH" ]]; then
+        PYTHON_ARGS+=("--labels" "$LABELS_PATH")
+    fi
+    "$PYTHON_BIN" -m src.inference.verify_audio "${PYTHON_ARGS[@]}"
 fi
 
 if [[ -n "$EVALUATION_DIR" ]]; then
@@ -52,7 +59,11 @@ if [[ -n "$EVALUATION_DIR" ]]; then
         echo "Audio evaluation requires the audio environment. Run: bash setup_environment.sh --audio --recreate" >&2
         exit 1
     }
-    "$PYTHON_BIN" -m src.data_prep.evaluate_audio_model --model "$MODEL_PATH" --labels "$LABELS_PATH" --test-dir "$EVALUATION_DIR"
+    PYTHON_ARGS=("--model" "$MODEL_PATH" "--test-dir" "$EVALUATION_DIR")
+    if [[ -n "$LABELS_PATH" ]]; then
+        PYTHON_ARGS+=("--labels" "$LABELS_PATH")
+    fi
+    "$PYTHON_BIN" -m src.data_prep.evaluate_audio_model "${PYTHON_ARGS[@]}"
 fi
 
 echo "Audio checks completed successfully."
