@@ -38,6 +38,65 @@ flowchart LR
 - Consecutive, readable Markdown reports for local test runs.
 - Docker environment for headless inference deployment.
 
+## Edge Deployment (Systemd Daemon Architecture)
+
+To maximize performance on Edge devices like Orange Pi 5 and Raspberry Pi 4, the inference pipeline is structured as a multi-threaded **Client-Server Systemd Daemon**. This prevents reloading heavy ONNX models into memory on every frame.
+
+### 1. Server (`cpds-inference-server`)
+Loads YOLOv8 and Audio CNN ONNX models into RAM once on boot. It listens to a Unix Domain Socket, executes AI inference upon receiving Base64 data, and returns the confidence scores.
+
+### 2. Client (`cpds-watch-client`)
+A lightweight, headless background service managing two parallel threads:
+- **Vision Loop**: Continually reads camera frames and sends them to the Server.
+- **Audio Loop**: Follows a battery-saving Duty-Cycle (Records 2s, sleeps 3s).
+The client calculates data freshness (Staleness Window) and triggers the physical Alarm (GPIO) only when both models detect an emergency.
+
+### Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant Cam as Camera
+    participant Mic as Microphone
+    participant Client as Daemon Client (Watch)
+    participant Socket as Unix Domain Socket
+    participant Server as Daemon Server (Inference)
+    participant Model as ONNX Models
+    participant GPIO as Alarm Buzzer
+
+    Note over Server, Model: Starts on OS boot<br/>Loads Models into RAM
+    Server->>Model: Initialize YOLOv8 & Audio CNN
+    
+    loop Every 0.5 seconds
+        Cam->>Client: Capture Frame
+        Client->>Socket: Request Vision (Base64 JPEG)
+        Socket->>Server: Forward Request
+        Server->>Model: Run Object Detection
+        Model-->>Server: Return: Adult/Child, Confidence
+        Server-->>Socket: Response (JSON)
+        Socket-->>Client: Update Vision State
+    end
+
+    loop Every 5 seconds (Duty-cycle)
+        Mic->>Client: Record PCM (2s)
+        Client->>Socket: Request Audio (Base64 PCM)
+        Socket->>Server: Forward Request
+        Server->>Server: Extract Mel-Spectrogram
+        Server->>Model: Run Audio Classification
+        Model-->>Server: Return: Cry/Noise, Confidence
+        Server-->>Socket: Response (JSON)
+        Socket-->>Client: Update Audio State
+    end
+
+    loop Decision Logic
+        Client->>Client: Check thresholds & data freshness
+        alt Child Detected AND Baby Crying
+            Client->>GPIO: HIGH (Trigger Alarm!)
+            Client->>Client: Write JSON Log
+        else Safe Condition
+            Client->>GPIO: LOW
+        end
+    end
+```
+
 ## Audio Subsystem Enhancements
 
 The audio classification pipeline has been highly optimized for edge deployment (e.g., Orange Pi 5):
