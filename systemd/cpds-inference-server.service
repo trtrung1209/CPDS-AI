@@ -1,0 +1,16 @@
+[Unit]
+Description=CPDS-AI Inference Server (Vision & Audio)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c "source .venv/bin/activate && python3 -m src.daemon.server"
+WorkingDirectory=/media/trtrung1209/WORKSPACES/WORKSPACES/01_PROJECTS/2026_NCKH_CPDS-AI
+Restart=on-failure
+RestartSec=5s
+Environment="CPDS_SOCKET_PATH=/tmp/cpds_inference.sock"
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
