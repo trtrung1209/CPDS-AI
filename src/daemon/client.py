@@ -57,7 +57,7 @@ class WatchClient:
         return {}
 
     def vision_loop(self):
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
         while self.running:
             ret, frame = cap.read()
             if not ret:
@@ -79,12 +79,26 @@ class WatchClient:
             time.sleep(0.5)
         cap.release()
 
+    def _find_usb_mic(self):
+        for i, dev in enumerate(sd.query_devices()):
+            if dev['max_input_channels'] > 0 and 'usb' in dev['name'].lower():
+                return i, int(dev['default_samplerate'])
+        return None, 44100
+
     def audio_loop(self):
-        sample_rate = 16000
+        device_idx, sample_rate = self._find_usb_mic()
+        if device_idx is not None:
+            print(f"Using USB Mic [idx {device_idx}] at {sample_rate}Hz")
+        else:
+            print("WARNING: No USB Mic found. Falling back to default.")
+
         duration = 2.0
         while self.running:
             try:
-                recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype="float32")
+                if device_idx is not None:
+                    recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype="float32", device=device_idx)
+                else:
+                    recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype="float32")
                 sd.wait()
                 recording = recording.flatten()
                 

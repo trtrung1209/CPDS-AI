@@ -55,7 +55,8 @@ class ONNXBackend:
             temp_path = f.name
         try:
             write_wav(temp_path, sample_rate, pcm_data)
-            input_data = preprocess_audio(temp_path, sr=sample_rate, duration=2.0)
+            # Ép resample về 16000Hz để khớp với dữ liệu huấn luyện của ONNX
+            input_data = preprocess_audio(temp_path, sr=16000, duration=2.0)
         finally:
             os.remove(temp_path)
             
