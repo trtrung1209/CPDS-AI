@@ -11,18 +11,21 @@ from flask import Flask, Response
 app = Flask(__name__)
 
 # === SHARED STATE ===
-latest_raw_frame = None        # Frame gốc từ Camera (chưa vẽ gì)
-latest_display_frame = None    # Frame đã vẽ overlay (để phát stream)
+latest_raw_frame = None
+latest_display_frame = None
 frame_lock = threading.Lock()
 
+# Vision AI results (bao gom bounding boxes)
 vision_label = "Vision: Starting..."
 vision_color = (80, 80, 80)
+vision_boxes = []  # Danh sach cac bounding box tu AI
+
+# Audio AI results
 audio_label = "Mic: Starting..."
 audio_color = (80, 80, 80)
 
 SOCKET_PATH = "/tmp/cpds_inference.sock"
 
-# Persistent socket
 _sock = None
 _infile = None
 _outfile = None
@@ -85,18 +88,17 @@ def find_usb_mic():
 
 
 # ===========================================================
-#  THREAD 1: Camera Capture (chi chup anh, KHONG lam gi khac)
+#  THREAD 1: Camera Capture
 # ===========================================================
 def camera_capture_thread():
-    """Chup anh lien tuc tu USB Camera va luu vao bien chung."""
     global latest_raw_frame
     cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
+    cap.set(cv2.CAP_PROP_FOCUS, 0)  # Thu reset focus
 
-    # Warm up
-    for _ in range(5):
+    for _ in range(10):
         cap.read()
         time.sleep(0.1)
 
@@ -108,14 +110,13 @@ def camera_capture_thread():
             continue
         with frame_lock:
             latest_raw_frame = frame.copy()
-        time.sleep(0.04)  # ~25 FPS
+        time.sleep(0.04)
 
 
 # ===========================================================
-#  THREAD 2: Display (ve overlay roi nen JPEG cho Web stream)
+#  THREAD 2: Display (ve bounding boxes + overlay)
 # ===========================================================
 def display_thread():
-    """Doc frame goc, ve thanh trang thai len, nen JPEG."""
     global latest_display_frame
     while True:
         with frame_lock:
@@ -127,34 +128,54 @@ def display_thread():
 
         h, w = frame.shape[:2]
 
-        # Thanh tren: Vision
-        cv2.rectangle(frame, (0, 0), (w, 36), vision_color, -1)
-        cv2.putText(frame, vision_label, (10, 26),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        # === VE BOUNDING BOXES ===
+        for box in vision_boxes:
+            x1, y1, x2, y2 = box["x1"], box["y1"], box["x2"], box["y2"]
+            cls = box["class"]
+            conf = box["confidence"]
+            is_child = box.get("is_child", False)
 
-        # Thanh duoi: Audio
-        cv2.rectangle(frame, (0, h - 36), (w, h), audio_color, -1)
-        cv2.putText(frame, audio_label, (10, h - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2)
+            # Mau do cho tre em, xanh la cho nguoi lon
+            color = (0, 0, 255) if is_child else (0, 220, 0)
+            thickness = 3 if is_child else 2
+
+            # Ve khung chu nhat
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+
+            # Ve nhan (label) phia tren khung
+            label = f"{'CHILD' if is_child else cls} {conf:.0%}"
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            cv2.rectangle(frame, (x1, y1 - th - 8), (x1 + tw + 6, y1), color, -1)
+            cv2.putText(frame, label, (x1 + 3, y1 - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+        # === THANH TREN: Vision status ===
+        cv2.rectangle(frame, (0, 0), (w, 32), vision_color, -1)
+        cv2.putText(frame, vision_label, (8, 23),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+        # === THANH DUOI: Audio status ===
+        cv2.rectangle(frame, (0, h - 32), (w, h), audio_color, -1)
+        cv2.putText(frame, audio_label, (8, h - 8),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
         # Timestamp
         ts = time.strftime("%H:%M:%S")
-        cv2.putText(frame, ts, (w - 105, h - 46),
+        cv2.putText(frame, ts, (w - 100, h - 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (160, 160, 160), 1)
 
-        ret, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        if ret:
+        ret_enc, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 82])
+        if ret_enc:
             latest_display_frame = buf.tobytes()
 
-        time.sleep(0.04)  # ~25 FPS
+        time.sleep(0.04)
 
 
 # ===========================================================
-#  THREAD 3: Vision AI (doc frame chung, gui cho Server)
+#  THREAD 3: Vision AI
 # ===========================================================
 def vision_ai_thread():
-    """Moi 1.5 giay lay 1 frame tu bien chung va gui cho AI Server."""
-    global vision_label, vision_color
+    global vision_label, vision_color, vision_boxes
     print("[Vision AI] Thread started")
 
     while True:
@@ -178,22 +199,28 @@ def vision_ai_thread():
             cls = result.get("class", "None")
             conf = result.get("confidence", 0.0)
             is_child = result.get("child_detected", False)
+            boxes = result.get("boxes", [])
+
+            # Cap nhat bounding boxes
+            vision_boxes = boxes
 
             if cls != "None":
+                n_det = len(boxes)
                 if is_child:
-                    vision_label = f"[!] CHILD: {conf:.0%}"
+                    vision_label = f"[!] CHILD: {conf:.0%} ({n_det} det)"
                     vision_color = (0, 0, 200)
                 else:
-                    vision_label = f"[OK] {cls}: {conf:.0%}"
-                    vision_color = (0, 160, 0)
+                    vision_label = f"[OK] {cls}: {conf:.0%} ({n_det} det)"
+                    vision_color = (0, 140, 0)
             else:
+                vision_boxes = []
                 vision_label = "No person detected"
                 vision_color = (80, 80, 80)
         else:
             vision_label = "AI Server Offline"
             vision_color = (60, 60, 60)
 
-        time.sleep(1.5)  # Pi 4: YOLO mat ~1s/frame, nghi 0.5s
+        time.sleep(1.5)
 
 
 # ===========================================================
@@ -223,8 +250,15 @@ def audio_ai_thread():
             recording = recording.flatten()
 
             max_val = np.max(np.abs(recording))
-            if max_val > 1e-4:
-                recording = (recording / max_val) * 0.95
+            print(f"[Audio] Raw peak amplitude: {max_val:.6f}")
+            
+            if max_val < 1e-4:
+                audio_label = f"[!] Mic silent (amp={max_val:.6f})"
+                audio_color = (0, 0, 150)
+                time.sleep(1)
+                continue
+
+            recording = (recording / max_val) * 0.95
 
             b64 = base64.b64encode(recording.tobytes()).decode('utf-8')
             resp = send_to_server({
@@ -237,11 +271,15 @@ def audio_ai_thread():
                 result = resp["result"]
                 cry_conf = result.get("confidence", 0.0)
                 is_crying = result.get("is_crying", False)
+                probs = result.get("probabilities", {})
+                noise_conf = probs.get("noise", 0.0)
+                print(f"[Audio] AI result: cry={cry_conf:.2%}, noise={noise_conf:.2%}, peak={max_val:.4f}")
+
                 if is_crying:
-                    audio_label = f"[!] CRYING ({cry_conf:.0%})"
+                    audio_label = f"[!] CRYING {cry_conf:.0%} | noise {noise_conf:.0%}"
                     audio_color = (0, 0, 200)
                 else:
-                    audio_label = f"[OK] No cry ({cry_conf:.0%})"
+                    audio_label = f"[OK] cry {cry_conf:.0%} | noise {noise_conf:.0%}"
                     audio_color = (80, 80, 80)
             else:
                 audio_label = "AI Audio Offline"
@@ -257,7 +295,7 @@ def audio_ai_thread():
 
 
 # ===========================================================
-#  Flask Routes
+#  Flask
 # ===========================================================
 def generate_stream():
     while True:

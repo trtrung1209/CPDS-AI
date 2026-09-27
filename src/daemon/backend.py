@@ -37,9 +37,29 @@ class ONNXBackend:
         results = self.vision_model(img, verbose=False)
         result = results[0]
         
+        # Trích xuất toạ độ bounding box để vẽ lên hình
+        boxes_data = []
+        if result.boxes is not None and len(result.boxes) > 0:
+            for box in result.boxes:
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                class_id = int(box.cls.item())
+                class_name = str(result.names[class_id])
+                confidence = float(box.conf.item())
+                boxes_data.append({
+                    "x1": int(x1), "y1": int(y1),
+                    "x2": int(x2), "y2": int(y2),
+                    "class": class_name,
+                    "confidence": confidence,
+                    "is_child": class_name.strip().lower() in {"child", "children", "kid"},
+                })
+        
         if result.boxes is None or len(result.boxes) == 0:
-            return summarize_detections(result.names, [])
-        return summarize_detections(result.names, result.boxes)
+            summary = summarize_detections(result.names, [])
+        else:
+            summary = summarize_detections(result.names, result.boxes)
+        
+        summary["boxes"] = boxes_data
+        return summary
 
     def predict_audio(self, audio_data: bytes, sample_rate: int) -> Dict[str, Any]:
         from src.inference.verify_audio import preprocess_audio
