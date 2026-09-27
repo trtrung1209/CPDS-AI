@@ -22,12 +22,14 @@ def validate_audio_runtime():
 def preprocess_audio(audio_path, sr=16000, duration=2.0):
     """
     Extract a Mel spectrogram using the same shape as Kaggle training.
+    Applies a Bandpass filter to reduce USB mic noise.
     """
     audio_path = Path(audio_path)
     if not audio_path.is_file():
         raise FileNotFoundError(f"Audio file does not exist: {audio_path}")
 
     librosa = validate_audio_runtime()
+    import scipy.signal
 
     y, sr = librosa.load(str(audio_path), sr=sr, duration=duration)
     target_length = int(sr * duration)
@@ -35,6 +37,18 @@ def preprocess_audio(audio_path, sr=16000, duration=2.0):
         y = np.pad(y, (0, target_length - len(y)))
     else:
         y = y[:target_length]
+        
+    # LỌC NHIỄU (Bandpass Filter 300Hz - 4000Hz)
+    # Loại bỏ tiếng ù điện (dưới 300Hz) và tiếng xì xèo tĩnh (trên 4000Hz)
+    # Giữ lại dải tần số đặc trưng của tiếng khóc trẻ em
+    nyq = 0.5 * sr
+    low = 300.0 / nyq
+    high = 4000.0 / nyq
+    b, a = scipy.signal.butter(5, [low, high], btype='band')
+    y = scipy.signal.filtfilt(b, a, y)
+    
+    # Pre-emphasis (Làm rõ nét tần số giọng nói)
+    y = librosa.effects.preemphasis(y)
         
     mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128)
     mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
