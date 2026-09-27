@@ -1,0 +1,13 @@
+names:
+- adult
+- child
+nc: 2
+roboflow:
+  license: CC BY 4.0
+  project: child-adult-detection-bgjzk
+  url: https://universe.roboflow.com/timii-owolabi-pwfjm/child-adult-detection-bgjzk/dataset/10
+  version: 10
+  workspace: timii-owolabi-pwfjm
+test: ../test/images
+train: ../train/images
+val: ../valid/images

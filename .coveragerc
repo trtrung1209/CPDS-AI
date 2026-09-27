@@ -1,4 +1,3 @@
 [run]
 omit =
     src/cli/*
-    src/data_prep/*

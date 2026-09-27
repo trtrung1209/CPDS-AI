@@ -102,6 +102,12 @@ class WatchClient:
                 sd.wait()
                 recording = recording.flatten()
                 
+                # Noise Gate: Calculate RMS and drop packet if it's just static
+                rms = (recording**2).mean()**0.5
+                if rms < 0.02:
+                    print(f"Audio ignored (Noise Gate): RMS {rms:.4f} < 0.02")
+                    continue
+                
                 b64 = base64.b64encode(recording.tobytes()).decode('utf-8')
                 resp = self._send_request({"type": "audio", "pcm_b64": b64, "sample_rate": sample_rate})
                 
