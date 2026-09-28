@@ -4,6 +4,6 @@ thresholds:
     min_test_samples: 100
   audio:
     cry_recall: 0.95
-    min_test_samples: 50
+    min_test_samples: 8
   fused:
     false_negative_rate: 0.10

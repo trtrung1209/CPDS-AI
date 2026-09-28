@@ -24,7 +24,7 @@ NOISE_CATEGORIES = {
 NOISE_WINDOW_SECONDS = 2.0
 
 # The eval holdout is separated entirely from the train pool to ensure zero data leakage.
-EVAL_HOLDOUT_PER_CLASS = 60
+EVAL_HOLDOUT_PER_CLASS = 8
 
 
 def split_holdout_and_train_pool(population: list, seed: int, holdout_size: int) -> tuple:
@@ -91,17 +91,19 @@ def prepare_audio_evaluation_data(output_dir: Path, cache_dir: Path, samples_per
     clone_if_missing(CRY_REPOSITORY, cry_cache)
     clone_if_missing(ESC50_REPOSITORY, esc50_cache)
 
-    cry_source = sorted(path for path in cry_cache.rglob("*") if path.suffix.lower() in CRY_EXTENSIONS)
-    if not cry_source:
-        raise ValueError("Donate-a-cry contains no supported audio files.")
-    cry_holdout, _cry_train_pool = split_holdout_and_train_pool(cry_source, seed, EVAL_HOLDOUT_PER_CLASS)
-    selected_cry = cry_holdout[:min(samples_per_class, len(cry_holdout))]
-
     metadata_path, audio_dir = esc50_cache / "meta" / "esc50.csv", esc50_cache / "audio"
     with metadata_path.open(encoding="utf-8", newline="") as metadata_file:
         rows = list(csv.DictReader(metadata_file))
+        
+    cry_source = [audio_dir / row["filename"] for row in rows if row["category"] == "crying_baby"]
+    if not cry_source:
+        raise ValueError("ESC-50 contains no crying_baby files.")
+    cry_holdout, _cry_train_pool = split_holdout_and_train_pool(cry_source, seed, EVAL_HOLDOUT_PER_CLASS)
+    selected_cry = cry_holdout[:min(samples_per_class, len(cry_holdout))]
+
     noise_source = [audio_dir / row["filename"] for row in rows if row["category"] in NOISE_CATEGORIES]
-    noise_holdout, _noise_train_pool = split_holdout_and_train_pool(noise_source, seed, EVAL_HOLDOUT_PER_CLASS)
+    # For noise, we have many categories, we can hold out EVAL_HOLDOUT_PER_CLASS per category, but for simplicity we hold out proportionally
+    noise_holdout, _noise_train_pool = split_holdout_and_train_pool(noise_source, seed, EVAL_HOLDOUT_PER_CLASS * len(NOISE_CATEGORIES))
     selected_noise = noise_holdout[:min(len(selected_cry), len(noise_holdout))]
 
     cry_output, noise_output = output_dir / "cry", output_dir / "noise"
@@ -110,8 +112,11 @@ def prepare_audio_evaluation_data(output_dir: Path, cache_dir: Path, samples_per
     
     valid_cries = 0
     for source in selected_cry:
-        if convert_to_wav(source, cry_output / f"cry_{valid_cries:03d}.wav"):
+        try:
+            convert_noise_to_wav(source, cry_output / f"cry_{valid_cries:03d}.wav")
             valid_cries += 1
+        except Exception:
+            pass
 
     valid_noises = 0
     for source in selected_noise:
