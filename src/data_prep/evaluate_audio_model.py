@@ -5,7 +5,7 @@ import json
 import numpy as np
 from pathlib import Path
 
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, roc_curve
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, roc_curve, precision_recall_curve
 
 from src.inference.verify_audio import infer_audio, validate_audio_runtime
 
@@ -87,11 +87,17 @@ def evaluate_model(model_path: Path, test_dir: Path, labels_path: Path | None = 
 
     roc_auc = 0.0
     thresholds_sweep = []
+    pr_sweep = []
     try:
         roc_auc = float(roc_auc_score(y_true, y_prob))
         fpr, tpr, thresh = roc_curve(y_true, y_prob)
         for f, t, th in zip(fpr, tpr, thresh):
             thresholds_sweep.append({"threshold": float(th), "fpr": float(f), "tpr": float(t)})
+            
+        prec, rec, pr_thresh = precision_recall_curve(y_true, y_prob)
+        # precision_recall_curve returns len(thresh)+1 prec/rec points.
+        for p, r in zip(prec, rec):
+            pr_sweep.append({"precision": float(p), "recall": float(r)})
     except ValueError:
         pass  # Only one class present
 
@@ -113,6 +119,7 @@ def evaluate_model(model_path: Path, test_dir: Path, labels_path: Path | None = 
         ),
         "missed_cries": missed_cries,
         "thresholds_sweep": thresholds_sweep,
+        "pr_sweep": pr_sweep,
     }
 
 
@@ -154,6 +161,22 @@ def plot_audio_metrics(report: dict, output_dir: Path) -> dict:
             plt.savefig(roc_path, bbox_inches="tight")
             plt.close()
             paths["roc_curve"] = roc_path
+            
+        # 3. Precision-Recall Curve
+        if "pr_sweep" in report and report["pr_sweep"]:
+            prec = [x["precision"] for x in report["pr_sweep"]]
+            rec = [x["recall"] for x in report["pr_sweep"]]
+            plt.figure(figsize=(6, 5))
+            plt.plot(rec, prec, color='purple', lw=2)
+            plt.xlim([0.0, 1.0])
+            plt.ylim([0.0, 1.05])
+            plt.xlabel('Recall')
+            plt.ylabel('Precision')
+            plt.title('Audio Precision-Recall Curve')
+            pr_path = output_dir / "audio_pr_curve.png"
+            plt.savefig(pr_path, bbox_inches="tight")
+            plt.close()
+            paths["pr_curve"] = pr_path
             
         return paths
     except ImportError:

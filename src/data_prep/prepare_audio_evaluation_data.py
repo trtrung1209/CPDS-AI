@@ -43,12 +43,16 @@ def clone_if_missing(repository: str, destination: Path) -> None:
     subprocess.run(["git", "clone", "--depth", "1", repository, str(destination)], check=True)
 
 
-def convert_to_wav(source: Path, destination: Path) -> None:
+def convert_to_wav(source: Path, destination: Path) -> bool:
     """Convert one source clip to the evaluation format used by inference."""
-    subprocess.run(
-        ["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(source), "-ac", "1", "-ar", "16000", str(destination)],
-        check=True,
-    )
+    try:
+        subprocess.run(
+            ["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(source), "-ac", "1", "-ar", "16000", str(destination)],
+            check=True,
+        )
+        return destination.is_file()
+    except subprocess.CalledProcessError:
+        return False
 
 
 def select_loudest_window(y: np.ndarray, sr: int, duration: float = 2.0, hop_fraction: float = 0.1) -> np.ndarray:
@@ -103,15 +107,24 @@ def prepare_audio_evaluation_data(output_dir: Path, cache_dir: Path, samples_per
     cry_output, noise_output = output_dir / "cry", output_dir / "noise"
     cry_output.mkdir(parents=True, exist_ok=True)
     noise_output.mkdir(parents=True, exist_ok=True)
-    for index, source in enumerate(selected_cry):
-        convert_to_wav(source, cry_output / f"cry_{index:03d}.wav")
-    for index, source in enumerate(selected_noise):
-        convert_noise_to_wav(source, noise_output / f"noise_{index:03d}.wav")
+    
+    valid_cries = 0
+    for source in selected_cry:
+        if convert_to_wav(source, cry_output / f"cry_{valid_cries:03d}.wav"):
+            valid_cries += 1
+
+    valid_noises = 0
+    for source in selected_noise:
+        try:
+            convert_noise_to_wav(source, noise_output / f"noise_{valid_noises:03d}.wav")
+            valid_noises += 1
+        except Exception:
+            pass
 
     manifest = {
         "seed": seed,
-        "cry_count": len(selected_cry),
-        "noise_count": len(selected_noise),
+        "cry_count": valid_cries,
+        "noise_count": valid_noises,
         "sources": [CRY_REPOSITORY, ESC50_REPOSITORY],
         "noise_categories": sorted(NOISE_CATEGORIES),
         "noise_prep": "loudest-2s-RMS-window",

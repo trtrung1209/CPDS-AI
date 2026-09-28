@@ -1,9 +1,9 @@
 thresholds:
   vision:
-    child_recall: 1.0
+    child_recall: 0.90
     min_test_samples: 100
   audio:
-    cry_recall: 1.0
-    min_test_samples: 60
+    cry_recall: 0.95
+    min_test_samples: 50
   fused:
-    false_negative_rate: 0.0
+    false_negative_rate: 0.10

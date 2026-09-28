@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 
-def prepare_vision_evaluation_data(output_dir: Path, workspace: str = "timii-owolabi-pwfjm", project: str = "child-adult-detection-bgjzk", version: int = 10) -> dict:
+def prepare_vision_evaluation_data(output_dir: Path, workspace: str = "trung-tran-hnna8", project: str = "child-adult-detection-bgjzk-2qw9j", version: int = 1) -> dict:
     """Download the Roboflow dataset and extract ONLY the held-out test split."""
     api_key = os.environ.get("ROBOFLOW_API_KEY")
     if not api_key:

@@ -144,11 +144,32 @@ def mode_evaluate() -> None:
     with open(config_path) as f:
         config = yaml.safe_load(f)["thresholds"]
         
-    # Prepare Report Directory early so we can save plots
-    report_dir = PROJECT_ROOT / "test_reports"
-    report_dir.mkdir(exist_ok=True)
-    report_path = report_dir / f"evaluation_report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-        
+    # Prepare Report Directory (grouped into runs, e.g., test_reports/run1)
+    from src.utils import get_next_run_dir
+    import shutil
+    
+    report_dir = get_next_run_dir(PROJECT_ROOT / "test_reports")
+    report_path = report_dir / "evaluation_report.md"
+    
+    class TeeLogger:
+        def __init__(self, path):
+            self.terminal = sys.stdout
+            self.log = open(path, "a", encoding="utf-8")
+        def write(self, msg):
+            self.terminal.write(msg)
+            self.log.write(msg)
+        def flush(self):
+            self.terminal.flush()
+            self.log.flush()
+        def isatty(self):
+            if hasattr(self.terminal, 'isatty'):
+                return self.terminal.isatty()
+            return False
+
+    console_log_path = report_dir / "console.log"
+    sys.stdout = TeeLogger(console_log_path)
+    
+    print(f"\n[INFO] Starting Evaluation Run: {report_dir.name}")
     print("\n--- STEP 1: UNIT TESTS (PYTEST) ---")
     try:
         import pytest
@@ -167,20 +188,22 @@ def mode_evaluate() -> None:
         sys.exit(1)
     
     from src.data_prep.evaluate_vision_model import evaluate_vision_model
-    vision_report = evaluate_vision_model(VISION_MODEL, vision_test_dir)
+    vision_report = evaluate_vision_model(VISION_MODEL, vision_test_dir, report_dir)
     print(f"  mAP@50: {vision_report['mAP50']:.4f} | Child Recall: {vision_report['child_recall']:.4f}")
     
-    # Grab YOLOv8 generated plots
+    # Vision plots are now neatly generated inside report_dir / "vision_details"
     vision_plots = []
-    val_dir = PROJECT_ROOT / "runs" / "detect"
-    if val_dir.is_dir():
-        # Find the most recently modified directory in runs/detect/
-        latest_val = max(val_dir.glob("val*"), key=lambda x: x.stat().st_mtime, default=None)
-        if latest_val:
-            for plot_name in ["confusion_matrix.png", "F1_curve.png", "PR_curve.png"]:
-                plot_file = latest_val / plot_name
-                if plot_file.is_file():
-                    vision_plots.append(plot_file.resolve())
+    vision_details_dir = report_dir / "vision_details"
+    if vision_details_dir.is_dir():
+        for plot_name in [
+            "confusion_matrix.png", "F1_curve.png", "PR_curve.png",
+            "P_curve.png", "R_curve.png", 
+            "val_batch0_labels.jpg", "val_batch0_pred.jpg", 
+            "results.png"
+        ]:
+            plot_file = vision_details_dir / plot_name
+            if plot_file.is_file():
+                vision_plots.append(f"vision_details/{plot_name}")
     
     print("\n--- STEP 3: EVALUATING AUDIO MODEL (AudioCNN) ---")
     audio_test_dir = PROJECT_ROOT / "data" / "test_audio"
@@ -223,7 +246,7 @@ def mode_evaluate() -> None:
     # Generate Markdown Report (Paths defined at the top of the function)
     
     lines = [
-        "# CPDS-AI Safety & Evaluation Report",
+        f"# CPDS-AI Safety & Evaluation Report ({report_dir.name})",
         f"**Date:** {datetime.datetime.now().isoformat()}",
         f"**Vision Model Hash:** {get_model_hash(VISION_MODEL)}",
         f"**Audio Model Hash:** {get_model_hash(AUDIO_MODEL)}",
@@ -246,7 +269,7 @@ def mode_evaluate() -> None:
     if vision_plots:
         lines.append("\n### Vision Performance Plots:")
         for p in vision_plots:
-            lines.append(f"![{p.name}]({p})")
+            lines.append(f"![{p.split('/')[-1]}]({p})")
             
     lines.append("\n### Vision False Negatives (Missed Children):")
     if not vision_report["missed_children"]:
@@ -255,16 +278,19 @@ def mode_evaluate() -> None:
         for m in vision_report["missed_children"]:
             lines.append(f"- `{m['file']}`: Conf={m['best_pred_conf']}, Area={m['gt_area_pct']}%. Reason: {m['reason']}")
             
+    audio_cry = audio_report["classification_report"].get("cry", {})
     lines.extend([
         "\n## 2. Audio Model (AudioCNN)",
         f"- Accuracy: {audio_report['accuracy']:.4f}",
         f"- ROC-AUC: {audio_report['roc_auc']:.4f}",
+        f"- Cry Precision: {audio_cry.get('precision', 0):.4f}",
         f"- Cry Recall: {audio_report['cry_recall']:.4f} (Target: {config['audio']['cry_recall']})",
+        f"- Cry F1-Score: {audio_cry.get('f1-score', 0):.4f}",
     ])
     if audio_plot_paths:
         lines.append("\n### Audio Performance Plots:")
         for name, p in audio_plot_paths.items():
-            lines.append(f"![{name}]({p})")
+            lines.append(f"![{name}]({p.name})")
             
     lines.append("\n### Audio False Negatives (Missed Cries):")
     if not audio_report["missed_cries"]:
@@ -298,6 +324,7 @@ def mode_evaluate() -> None:
             print(f"  {r}")
             
     print(f"\nDetailed markdown report written to: {report_path}")
+    print(f"Full console log saved to: {console_log_path}")
     if not is_ready:
         sys.exit(1)
 

@@ -20,7 +20,7 @@ def parse_yolo_label(label_path: Path) -> list:
     return boxes
 
 
-def evaluate_vision_model(model_path: Path, test_dir: Path) -> Dict[str, Any]:
+def evaluate_vision_model(model_path: Path, test_dir: Path, output_dir: Path = None) -> Dict[str, Any]:
     """Run validation and extract detailed False Negative (Miss) analysis for the child class."""
     if not model_path.is_file():
         raise FileNotFoundError(f"Vision model not found: {model_path}")
@@ -35,7 +35,10 @@ def evaluate_vision_model(model_path: Path, test_dir: Path) -> Dict[str, Any]:
     model = YOLO(str(model_path), task="detect")
     
     print("[INFO] Running Ultralytics validation for mAP metrics...")
-    val_metrics = model.val(data=str(data_yaml), device="cpu", verbose=False)
+    if output_dir:
+        val_metrics = model.val(data=str(data_yaml), device="cpu", verbose=False, project=str(output_dir), name="vision_details", exist_ok=True)
+    else:
+        val_metrics = model.val(data=str(data_yaml), device="cpu", verbose=False)
     
     # We must explicitly find all child instances and check if the model missed them.
     # We assume class 1 is 'child' based on our data.yaml.
