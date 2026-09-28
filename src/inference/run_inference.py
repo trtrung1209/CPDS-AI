@@ -25,13 +25,21 @@ def infer_audio(*args, **kwargs):
     return implementation(*args, **kwargs)
 
 def should_trigger_alarm(vision_result, audio_result, vision_threshold, cry_threshold):
-    """Return true only when both detection confidences meet their safety thresholds."""
-    return (
-        vision_result["child_detected"]
-        and vision_result["confidence"] >= vision_threshold
-        and audio_result["is_crying"]
-        and audio_result["confidence"] >= cry_threshold
-    )
+    """
+    Trigger alarm if:
+    1. Child is detected confidently (regardless of sound)
+    OR
+    2. Crying is heard confidently.
+    BUT suppress the alarm if an Adult is detected (Safe mode).
+    """
+    has_child = vision_result.get("child_detected", False) and vision_result.get("child_confidence", vision_result["confidence"]) >= vision_threshold
+    has_adult = vision_result.get("adult_detected", False) and vision_result.get("adult_confidence", 0.0) >= vision_threshold
+    has_cry = audio_result["is_crying"] and audio_result["confidence"] >= cry_threshold
+    
+    if has_adult:
+        return False
+        
+    return has_child or has_cry
 
 
 def run(

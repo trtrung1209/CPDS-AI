@@ -9,18 +9,29 @@ from src.utils import get_next_run_dir
 
 
 def summarize_detections(names, boxes):
-    """Select the most confident child, or the most confident detection."""
-    best = {"class": "None", "confidence": 0.0, "child_detected": False}
+    """Trích xuất riêng rẽ mức độ tự tin cao nhất của Child và Adult."""
+    child_conf = 0.0
+    adult_conf = 0.0
+    
     for box in boxes:
         class_id = int(box.cls.item())
-        class_name = str(names[class_id])
+        class_name = str(names[class_id]).strip().lower()
         confidence = float(box.conf.item())
-        is_child = class_name.strip().lower() in {"child", "children", "kid"}
-        if is_child and (not best["child_detected"] or confidence > best["confidence"]):
-            best = {"class": class_name, "confidence": confidence, "child_detected": True}
-        elif not best["child_detected"] and confidence > best["confidence"]:
-            best = {"class": class_name, "confidence": confidence, "child_detected": False}
-    return best
+        
+        if class_name in {"child", "children", "kid"}:
+            child_conf = max(child_conf, confidence)
+        else:
+            adult_conf = max(adult_conf, confidence)
+            
+    return {
+        "child_detected": child_conf > 0,
+        "child_confidence": child_conf,
+        "adult_detected": adult_conf > 0,
+        "adult_confidence": adult_conf,
+        # Giữ lại các key cũ để tương thích với evaluate script
+        "confidence": child_conf if child_conf > 0 else adult_conf,
+        "class": "child" if child_conf > 0 else ("adult" if adult_conf > 0 else "None")
+    }
 
 
 def infer_vision(model_path, image_path):

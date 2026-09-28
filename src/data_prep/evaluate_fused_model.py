@@ -26,7 +26,7 @@ def evaluate_fused_model(vision_model: Path, audio_model: Path, vision_test_dir:
         img_path = vision_test_dir / "images" / f"{lbl.stem}.jpg"
         
         if img_path.is_file():
-            if has_child:
+            if has_child and not has_adult:
                 child_images.append(img_path)
             elif has_adult:
                 adult_images.append(img_path)
@@ -55,8 +55,8 @@ def evaluate_fused_model(vision_model: Path, audio_model: Path, vision_test_dir:
             })
             
     add_scenarios(child_images, cry_audios, True, "Child + Crying")
-    add_scenarios(child_images, noise_audios, False, "Child + Silent/Noise")
-    add_scenarios(adult_images, cry_audios, False, "Adult + Crying (Other source)")
+    add_scenarios(child_images, noise_audios, True, "Child + Silent/Noise") # MUST trigger because child is alone
+    add_scenarios(adult_images, cry_audios, False, "Adult + Crying (Other source or safe mode)")
     add_scenarios(adult_images, noise_audios, False, "Adult + Noise")
     
     failures = []
