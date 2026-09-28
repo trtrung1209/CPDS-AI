@@ -33,6 +33,7 @@ MANIFEST
 # Data and models
 data/
 runs/
+child-adult-detection-*/
 *.pt
 *.onnx
 *.rknn

@@ -38,18 +38,6 @@ def preprocess_audio(audio_path, sr=16000, duration=2.0):
     else:
         y = y[:target_length]
         
-    # LỌC NHIỄU (Bandpass Filter 300Hz - 4000Hz)
-    # Loại bỏ tiếng ù điện (dưới 300Hz) và tiếng xì xèo tĩnh (trên 4000Hz)
-    # Giữ lại dải tần số đặc trưng của tiếng khóc trẻ em
-    nyq = 0.5 * sr
-    low = 300.0 / nyq
-    high = 4000.0 / nyq
-    b, a = scipy.signal.butter(5, [low, high], btype='band')
-    y = scipy.signal.filtfilt(b, a, y)
-    
-    # Pre-emphasis (Làm rõ nét tần số giọng nói)
-    y = librosa.effects.preemphasis(y)
-        
     mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128)
     mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
     
