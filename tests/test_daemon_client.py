@@ -110,8 +110,10 @@ def test_send_request_reconnects(mock_sleep, mock_socket_cls, client):
 @patch("sounddevice.wait")
 @patch("time.sleep", return_value=None)
 def test_audio_loop(mock_sleep, mock_wait, mock_rec, client):
-    mock_rec.return_value = MagicMock()
-    mock_rec.return_value.flatten.return_value.tobytes.return_value = b"pcm"
+    import numpy as np
+    # Return a fake numpy array with RMS > 0.02 to bypass the noise gate
+    fake_audio = np.ones((100, 1), dtype=np.float32) * 0.1
+    mock_rec.return_value = fake_audio
     
     call_count = [0]
     def mock_send(*args, **kwargs):
