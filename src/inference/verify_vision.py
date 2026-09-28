@@ -24,16 +24,17 @@ from typing import Dict, List
 import cv2
 import numpy as np
 
-try:
-    # Prefer the lightweight runtime on Pi
-    from tflite_runtime.interpreter import Interpreter
-    TFLITE_RUNTIME = True
-except Exception:
+def _get_tflite_interpreter_cls():
     try:
-        from tensorflow.lite import Interpreter
-        TFLITE_RUNTIME = False
-    except Exception:
-        raise RuntimeError("No TFLite interpreter available. Install tflite-runtime or tensorflow.")
+        from tflite_runtime.interpreter import Interpreter
+        return Interpreter
+    except ImportError:
+        try:
+            from tensorflow.lite import Interpreter
+            return Interpreter
+        except ImportError:
+            raise RuntimeError("No TFLite interpreter available. Install tflite-runtime or tensorflow.")
+
 
 
 class ThreadedVideoCapture:
@@ -92,7 +93,8 @@ class TFLiteDetector:
         self.model_path = str(model_path)
         self.input_size = int(input_size)
         self.score_threshold = float(score_threshold)
-        self.interpreter = Interpreter(self.model_path)
+        interpreter_cls = _get_tflite_interpreter_cls()
+        self.interpreter = interpreter_cls(self.model_path)
         self.interpreter.allocate_tensors()
         self._get_io_details()
 
@@ -182,6 +184,49 @@ class TFLiteDetector:
         return {"child_detected": bool(child_detected), "confidence": float(best_conf), "detections": detections}
 
 
+def summarize_detections(names_dict: dict, boxes: list) -> dict:
+    """Summarize YOLO detection boxes, prioritizing child detections."""
+    if not boxes:
+        return {"class": "None", "confidence": 0.0, "child_detected": False}
+
+    child_candidates = []
+    other_candidates = []
+
+    for b in boxes:
+        cls_id = int(b.cls.item())
+        conf = float(b.conf.item())
+        cls_name = str(names_dict.get(cls_id, f"class_{cls_id}"))
+        item = {"class": cls_name, "confidence": conf}
+        if "child" in cls_name.lower():
+            child_candidates.append(item)
+        else:
+            other_candidates.append(item)
+
+    if child_candidates:
+        best_child = max(child_candidates, key=lambda x: x["confidence"])
+        return {"class": best_child["class"], "confidence": best_child["confidence"], "child_detected": True}
+
+    best_other = max(other_candidates, key=lambda x: x["confidence"])
+    return {"class": best_other["class"], "confidence": best_other["confidence"], "child_detected": False}
+
+
+def infer_vision(model_path: Path, image_path: Path):
+    """Perform vision inference on a single image using YOLO model."""
+    model_path = Path(model_path)
+    image_path = Path(image_path)
+    if not model_path.is_file():
+        raise FileNotFoundError(f"Vision model does not exist: {model_path}")
+    if not image_path.is_file():
+        raise FileNotFoundError(f"Image file does not exist: {image_path}")
+
+    from ultralytics import YOLO
+    model = YOLO(str(model_path), task="detect")
+    results = model(str(image_path), verbose=False)
+    result = results[0]
+    summary = summarize_detections(result.names, result.boxes)
+    return summary, result
+
+
 def verify_vision_model(model_path: str, image_path: str):
     """Compatibility wrapper that runs model on a single image and saves annotated output."""
     model_path = Path(model_path)
@@ -191,20 +236,31 @@ def verify_vision_model(model_path: str, image_path: str):
     if not image_path.is_file():
         raise FileNotFoundError(f"Image file does not exist: {image_path}")
 
-    detector = TFLiteDetector(str(model_path), input_size=320)
-    img = cv2.imread(str(image_path))
-    res = detector.infer(img)
+    if str(model_path).endswith(".tflite"):
+        detector = TFLiteDetector(str(model_path), input_size=320)
+        img = cv2.imread(str(image_path))
+        res = detector.infer(img)
+        detections = res.get("detections", [])
+        for d in detections:
+            x1, y1, x2, y2 = map(int, d['box'])
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(img, f"{d['score']:.2f}", (x1, max(10, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+        res_summary = res
+        save_img = img
+    else:
+        summary, result = infer_vision(model_path, image_path)
+        res_summary = summary
+        save_img = result.plot()
 
-    # draw detections on image for verification and save next to run dir
-    for d in res.get("detections", []):
-        x1, y1, x2, y2 = map(int, d['box'])
-        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(img, f"{d['score']:.2f}", (x1, max(10, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
-
-    out_path = Path.cwd() / "verified_output_tflite.jpg"
-    cv2.imwrite(str(out_path), img)
+    from src.utils import get_next_run_dir
+    run_dir = get_next_run_dir()
+    out_path = Path(run_dir) / "verified_output.jpg"
+    written = cv2.imwrite(str(out_path), save_img)
+    if not written:
+        raise OSError(f"Could not save verified output image to {out_path}")
     print(f"Verification saved to: {out_path}")
-    return res
+    return res_summary
+
 
 
 def demo_camera_loop(model_path: str, src=0, runtime_seconds: int = 10):
