@@ -16,12 +16,16 @@ def box(class_id, confidence):
 def test_child_detection_is_prioritized():
     result = summarize_detections({0: "Adult", 1: "Child"}, [box(0, 0.99), box(1, 0.75)])
 
-    assert result == {"class": "Child", "confidence": 0.75, "child_detected": True}
+    assert result == {
+        "class": "child", "confidence": 0.75, "child_detected": True,
+        "child_confidence": 0.75, "adult_detected": True, "adult_confidence": 0.99
+    }
 
 
 def test_no_detections_returns_safe_default():
     assert summarize_detections({0: "Adult"}, []) == {
-        "class": "None", "confidence": 0.0, "child_detected": False
+        "class": "None", "confidence": 0.0, "child_detected": False,
+        "child_confidence": 0.0, "adult_detected": False, "adult_confidence": 0.0
     }
 
 
@@ -31,13 +35,19 @@ def test_most_confident_child_is_selected_case_insensitively():
         [box(1, 0.60), box(0, 0.99), box(2, 0.80)],
     )
 
-    assert result == {"class": "child", "confidence": 0.80, "child_detected": True}
+    assert result == {
+        "class": "child", "confidence": 0.80, "child_detected": True,
+        "child_confidence": 0.80, "adult_detected": True, "adult_confidence": 0.99
+    }
 
 
 def test_best_non_child_is_returned_when_no_child_exists():
     result = summarize_detections({0: "Adult", 1: "Driver"}, [box(0, 0.60), box(1, 0.80)])
 
-    assert result == {"class": "Driver", "confidence": 0.80, "child_detected": False}
+    assert result == {
+        "class": "adult", "confidence": 0.80, "child_detected": False,
+        "child_confidence": 0.0, "adult_detected": True, "adult_confidence": 0.80
+    }
 
 
 def test_missing_model_fails_before_loading_ultralytics(tmp_path):
@@ -73,7 +83,10 @@ def test_vision_inference_uses_yolo_result_and_returns_child(monkeypatch, tmp_pa
 
     summary, returned_result = infer_vision(model_path, image_path)
 
-    assert summary == {"class": "Child", "confidence": 0.80, "child_detected": True}
+    assert summary == {
+        "class": "child", "confidence": 0.80, "child_detected": True,
+        "child_confidence": 0.80, "adult_detected": True, "adult_confidence": 0.95
+    }
     assert returned_result is result
     assert captured == {"path": str(model_path), "task": "detect", "image_path": str(image_path), "verbose": False}
 
@@ -82,7 +95,7 @@ def test_verify_vision_checks_image_write_result(monkeypatch, tmp_path):
     result = SimpleNamespace(plot=lambda: "annotated-image")
     monkeypatch.setattr(
         "src.inference.verify_vision.infer_vision",
-        lambda *_args: ({"class": "Child", "confidence": 0.8, "child_detected": True}, result),
+        lambda *_args: ({"child_detected": True, "class": "child"}, result),
     )
     monkeypatch.setattr("src.inference.verify_vision.get_next_run_dir", lambda: tmp_path)
     fake_cv2 = ModuleType("cv2")

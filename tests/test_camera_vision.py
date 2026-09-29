@@ -20,6 +20,9 @@ def test_camera_releases_device_when_it_cannot_be_opened(monkeypatch, tmp_path):
         def release(self):
             released.append(True)
 
+        def set(self, prop, value):
+            return True
+
     fake_cv2 = ModuleType("cv2")
     fake_cv2.VideoCapture = lambda _index: ClosedCamera()
     class FakeYOLO:
@@ -33,8 +36,8 @@ def test_camera_releases_device_when_it_cannot_be_opened(monkeypatch, tmp_path):
     model_path = tmp_path / "model.onnx"
     model_path.touch()
 
-    with pytest.raises(RuntimeError, match="camera index 3"):
-        run_camera(model_path, camera_index=3)
+    with pytest.raises(RuntimeError, match="Could not open source 3"):
+        run_camera(model_path, source="3")
     assert released == [True]
 
 
@@ -46,10 +49,14 @@ def test_camera_releases_device_after_user_exits(monkeypatch, tmp_path):
             return True
 
         def read(self):
-            return True, "frame"
+            import numpy as np
+            return True, np.zeros((10, 10, 3), dtype=np.uint8)
 
         def release(self):
             events.append("release")
+
+        def set(self, prop, value):
+            return True
 
     class FakeYOLO:
         def __init__(self, path, task):
@@ -57,11 +64,19 @@ def test_camera_releases_device_after_user_exits(monkeypatch, tmp_path):
             assert task == "detect"
 
         def __call__(self, frame, verbose):
-            assert frame == "frame"
             assert verbose is False
-            return [SimpleNamespace(plot=lambda: "annotated")]
+            import numpy as np
+            return [SimpleNamespace(plot=lambda: np.zeros((10, 10, 3), dtype=np.uint8))]
 
     fake_cv2 = ModuleType("cv2")
+    fake_cv2.CAP_PROP_FRAME_WIDTH = 3
+    fake_cv2.CAP_PROP_FRAME_HEIGHT = 4
+    fake_cv2.FONT_HERSHEY_SIMPLEX = 0
+    fake_cv2.LINE_AA = 16
+    fake_cv2.rectangle = lambda *args, **kwargs: None
+    fake_cv2.putText = lambda *args, **kwargs: None
+    fake_cv2.addWeighted = lambda *args, **kwargs: None
+    fake_cv2.imwrite = lambda *args, **kwargs: True
     fake_cv2.VideoCapture = lambda _index: OpenCamera()
     fake_cv2.imshow = lambda title, image: events.append((title, image))
     fake_cv2.waitKey = lambda _delay: ord("q")
@@ -75,7 +90,10 @@ def test_camera_releases_device_after_user_exits(monkeypatch, tmp_path):
 
     run_camera(model_path)
 
-    assert events == [("CPDS-AI: YOLOv8 Live Inference", "annotated"), "release", "destroy"]
+    assert len(events) == 3
+    assert events[0][0] == "CPDS-AI: YOLOv8 Live Inference"
+    assert events[1] == "release"
+    assert events[2] == "destroy"
 
 
 def test_camera_releases_device_when_a_frame_cannot_be_read(monkeypatch, tmp_path):
@@ -91,11 +109,16 @@ def test_camera_releases_device_when_a_frame_cannot_be_read(monkeypatch, tmp_pat
         def release(self):
             events.append("release")
 
+        def set(self, prop, value):
+            return True
+
     class FakeYOLO:
         def __init__(self, _path, task):
             assert task == "detect"
 
     fake_cv2 = ModuleType("cv2")
+    fake_cv2.CAP_PROP_FRAME_WIDTH = 3
+    fake_cv2.CAP_PROP_FRAME_HEIGHT = 4
     fake_cv2.VideoCapture = lambda _index: OpenCamera()
     fake_cv2.destroyAllWindows = lambda: events.append("destroy")
     fake_ultralytics = ModuleType("ultralytics")

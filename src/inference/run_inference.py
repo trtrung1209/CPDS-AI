@@ -32,7 +32,7 @@ def should_trigger_alarm(vision_result, audio_result, vision_threshold, cry_thre
     2. Crying is heard confidently.
     BUT suppress the alarm if an Adult is detected (Safe mode).
     """
-    has_child = vision_result.get("child_detected", False) and vision_result.get("child_confidence", vision_result["confidence"]) >= vision_threshold
+    has_child = vision_result.get("child_detected", False) and vision_result.get("child_confidence", vision_result.get("confidence", 0.0)) >= vision_threshold
     has_adult = vision_result.get("adult_detected", False) and vision_result.get("adult_confidence", 0.0) >= vision_threshold
     has_cry = audio_result["is_crying"] and audio_result["confidence"] >= cry_threshold
     

@@ -24,7 +24,7 @@ def test_trigger_gpio(client):
 def test_check_alarm_staleness(mock_save, client):
     # Both fresh
     client.vision_time = time.time()
-    client.latest_vision = {"child_detected": True, "confidence": 0.8}
+    client.latest_vision = {"child_detected": True, "child_confidence": 0.8, "adult_detected": False}
     client.audio_time = time.time()
     client.latest_audio = {"is_crying": True, "confidence": 0.8}
     
@@ -32,8 +32,13 @@ def test_check_alarm_staleness(mock_save, client):
     assert client.alarm_state is True
     mock_save.assert_called_once()
     
-    # Audio gets stale
+    # Audio gets stale, daemon requires both sensors to be active -> alarm falls back to False
     client.audio_time = time.time() - 2.0
+    client._check_alarm()
+    assert client.alarm_state is False
+    
+    # Now make vision stale too
+    client.vision_time = time.time() - 2.0
     client._check_alarm()
     assert client.alarm_state is False
     
@@ -41,14 +46,20 @@ def test_check_alarm_thresholds(client):
     client.vision_time = time.time()
     client.audio_time = time.time()
     
-    # Below threshold
-    client.latest_vision = {"child_detected": True, "confidence": 0.5}
-    client.latest_audio = {"is_crying": True, "confidence": 0.8}
+    # Below threshold for BOTH
+    client.latest_vision = {"child_detected": True, "child_confidence": 0.5, "adult_detected": False}
+    client.latest_audio = {"is_crying": True, "confidence": 0.5}
     client._check_alarm()
     assert client.alarm_state is False
     
-    # Vision ok, Audio below threshold
-    client.latest_vision = {"child_detected": True, "confidence": 0.8}
+    # Vision ok (0.8 > 0.60), Audio below threshold -> Should trigger (OR logic)
+    client.latest_vision = {"child_detected": True, "child_confidence": 0.8, "adult_detected": False}
+    client.latest_audio = {"is_crying": True, "confidence": 0.5}
+    client._check_alarm()
+    assert client.alarm_state is True
+
+    # Vision ok, but Adult is present -> Safe mode suppresses alarm
+    client.latest_vision = {"child_detected": True, "child_confidence": 0.8, "adult_detected": True, "adult_confidence": 0.9}
     client.latest_audio = {"is_crying": True, "confidence": 0.5}
     client._check_alarm()
     assert client.alarm_state is False

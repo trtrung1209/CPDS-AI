@@ -7,8 +7,8 @@ if __package__ in {None, ""}:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 
-def run_camera(model_path, camera_index=0):
-    """Run live YOLO ONNX inference until the user presses q."""
+def run_camera(model_path, source="0"):
+    """Run live YOLO ONNX inference on camera, video, or image until the user presses q."""
     model_path = Path(model_path)
     if not model_path.is_file():
         raise FileNotFoundError(f"Model file not found: {model_path}")
@@ -19,22 +19,41 @@ def run_camera(model_path, camera_index=0):
 
     print(f"Loading YOLOv8 ONNX model from: {model_path} ...")
     model = YOLO(str(model_path), task="detect")
-    print("Opening camera. Press 'q' in the preview window to exit.")
-    cap = cv2.VideoCapture(camera_index)
-    if not cap.isOpened():
-        cap.release()
-        raise RuntimeError(f"Could not open camera index {camera_index}.")
+    # Try to cast source to int if it's a numeric string (for camera index)
+    try:
+        source_val = int(source)
+    except ValueError:
+        source_val = str(source)
 
-    # Đặt độ phân giải mặc định nhẹ nhàng để test
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    is_image = False
+    if isinstance(source_val, str) and source_val.lower().endswith(('.jpg', '.jpeg', '.png')):
+        is_image = True
+        frame = cv2.imread(source_val)
+        if frame is None:
+            raise RuntimeError(f"Could not read image file: {source_val}")
+        cap = None
+    else:
+        print("Opening source. Press 'q' in the preview window to exit.")
+        cap = cv2.VideoCapture(source_val)
+        if not cap.isOpened():
+            if cap: cap.release()
+            raise RuntimeError(f"Could not open source {source_val}.")
+        
+        # Đặt độ phân giải mặc định nhẹ nhàng để test
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     try:
         prev_time = time.time()
         while True:
-            success, frame = cap.read()
-            if not success:
-                raise RuntimeError("Could not read a frame from the camera.")
+            if not is_image:
+                success, frame = cap.read()
+                if not success:
+                    # If it's a video file that ended, just break instead of crashing
+                    if isinstance(source_val, str):
+                        print("End of video stream.")
+                        break
+                    raise RuntimeError("Could not read a frame from the camera.")
 
             curr_time = time.time()
             fps = 1 / (curr_time - prev_time) if (curr_time - prev_time) > 0 else 0
@@ -58,21 +77,35 @@ def run_camera(model_path, camera_index=0):
                 speed_ms = result.speed['inference']
                 cv2.putText(annotated_frame, f"Inference: {speed_ms:.1f}ms", (15, 60), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            
+            # Tự động lưu frame đầu tiên để chèn vào báo cáo
+            if 'saved_sample' not in locals():
+                out_dir = Path("test_reports")
+                out_dir.mkdir(exist_ok=True)
+                # Dùng tên file gốc để lưu
+                if isinstance(source_val, str):
+                    base_name = Path(source_val).stem
+                    out_name = f"sample_inference_{base_name}.jpg"
+                else:
+                    out_name = "sample_inference.jpg"
+                cv2.imwrite(str(out_dir / out_name), annotated_frame)
+                saved_sample = True
 
             cv2.imshow("CPDS-AI: YOLOv8 Live Inference", annotated_frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            if cv2.waitKey(1 if not is_image else 0) & 0xFF == ord("q"):
                 break
     finally:
-        cap.release()
+        if cap:
+            cap.release()
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":  # pragma: no cover
-    parser = argparse.ArgumentParser(description="Run live camera inference with a YOLOv8 ONNX model.")
+    parser = argparse.ArgumentParser(description="Run inference with a YOLOv8 ONNX model on webcam, video, or image.")
     parser.add_argument("--model", default="data/models/yolov8n-adult-child.onnx", help="Path to vision ONNX model")
-    parser.add_argument("--camera-index", type=int, default=0, help="Camera device index (default: 0)")
+    parser.add_argument("--source", type=str, default="0", help="Camera index (e.g. 0) or path to video/image file")
 
     args = parser.parse_args()
     try:
-        run_camera(args.model, args.camera_index)
+        run_camera(args.model, args.source)
     except (OSError, RuntimeError, ValueError) as error:
         parser.error(str(error))

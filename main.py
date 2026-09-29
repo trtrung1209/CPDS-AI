@@ -378,13 +378,13 @@ def mode_file(image_path: str, audio_path: str) -> None:
     print("-" * 35)
 
 
-def mode_camera() -> None:
-    """Launch live webcam inference."""
+def mode_camera(source: str = "0") -> None:
+    """Launch live webcam or video/image inference."""
     _require_vision_deps()
 
     from src.inference.camera_vision import run_camera
-    print("[INFO] Starting live camera inference...")
-    run_camera(model_path=str(VISION_MODEL))
+    print(f"[INFO] Starting live camera inference on source: {source}...")
+    run_camera(model_path=str(VISION_MODEL), source=source)
 
 
 def mode_mic(idle_seconds: float = 3.0) -> None:
@@ -432,6 +432,7 @@ def main() -> None:
     )
     parser.add_argument("--image", help="Image path (required for --mode file)")
     parser.add_argument("--audio", help="Audio path (required for --mode audio/file)")
+    parser.add_argument("--source", type=str, default="0", help="Camera index or path to video/image (for --mode camera)")
     parser.add_argument("--idle-seconds", type=float, default=3.0,
                          help="--mode mic only: idle time between recordings")
     args = parser.parse_args()
@@ -462,7 +463,7 @@ def main() -> None:
             parser.error("--mode file requires both --image and --audio paths.")
         mode_file(args.image, args.audio)
     elif args.mode == "camera":
-        mode_camera()
+        mode_camera(args.source)
     elif args.mode == "mic":
         mode_mic(args.idle_seconds)
 
