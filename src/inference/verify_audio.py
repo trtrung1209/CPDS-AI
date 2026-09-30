@@ -19,33 +19,79 @@ def validate_audio_runtime():
     return librosa
 
 
+def select_loudest_window(y, sr, duration=2.0, hop_fraction=0.1):
+    target_len = int(sr * duration)
+    if len(y) <= target_len:
+        return np.pad(y, (0, target_len - len(y)))
+    hop = max(1, int(target_len * hop_fraction))
+    best_start, best_energy = 0, -1.0
+    for start in range(0, len(y) - target_len + 1, hop):
+        segment = y[start:start + target_len]
+        energy = float(np.sum(segment.astype(np.float64) ** 2))
+        if energy > best_energy:
+            best_energy, best_start = energy, start
+    return y[best_start:best_start + target_len]
+
 def preprocess_audio(audio_path, sr=16000, duration=2.0):
     """
-    Extract a Mel spectrogram using the same shape as Kaggle training.
-    Applies a Bandpass filter to reduce USB mic noise.
+    Extract a Mel spectrogram using the EXACT SAME logic as Kaggle training.
     """
     audio_path = Path(audio_path)
     if not audio_path.is_file():
         raise FileNotFoundError(f"Audio file does not exist: {audio_path}")
 
     librosa = validate_audio_runtime()
-    import scipy.signal
 
-    y, sr = librosa.load(str(audio_path), sr=sr, duration=duration)
-    target_length = int(sr * duration)
-    if len(y) < target_length:
-        y = np.pad(y, (0, target_length - len(y)))
-    else:
-        y = y[:target_length]
+    y, _ = librosa.load(str(audio_path), sr=sr, mono=True)
+    if y.size == 0:
+        y = np.zeros(int(sr * duration), dtype=np.float32)
         
-    mel_spec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128)
-    mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
+    # 1. Tìm đoạn 2 giây chứa âm thanh to nhất (tránh cắt nhầm khoảng lặng đầu clip)
+    y = select_loudest_window(y, sr, duration=duration)
+        
+    # 2. Peak normalization (This was done before saving wavs in Kaggle!)
+    max_val = np.max(np.abs(y))
+    if np.isfinite(max_val) and max_val > 1e-4:
+        y = (y / max_val) * 0.95
+        
+    target_len = max(1, int(sr * duration))
+    if y.size > target_len:
+        y = y[:target_len]
+
+    n_fft = 2048
+    n_mels = 128
+    n_frames = 63
     
-    # Normalize
-    mel_spec_db = (mel_spec_db - mel_spec_db.min()) / (mel_spec_db.max() - mel_spec_db.min() + 1e-6)
+    if len(y) < n_fft:
+        pad_len = n_fft + (n_frames - 1) - len(y)
+        y = np.pad(y, (0, max(0, pad_len)), mode="constant")
+        hop_length = 1
+    else:
+        hop_length = max(1, (len(y) - n_fft) // (n_frames - 1))
+        target_samples = n_fft + (n_frames - 1) * hop_length
+        if len(y) > target_samples:
+            y = y[:target_samples]
+
+    mel = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels, power=2.0, fmax=sr / 2.0)
+    mel_db = librosa.power_to_db(mel, ref=np.max)
+    mel_db = np.asarray(mel_db, dtype=np.float32)
     
-    # ONNX input shape: (batch, channel, mel_bins, time_steps)
-    input_data = np.expand_dims(np.expand_dims(mel_spec_db, axis=0), axis=0)
+    mel_min = np.min(mel_db)
+    mel_max = np.max(mel_db)
+    if np.isfinite(mel_min) and np.isfinite(mel_max) and (mel_max - mel_min) > 1e-8:
+        mel_db = (mel_db - mel_min) / (mel_max - mel_min + 1e-8)
+    else:
+        mel_db = np.zeros_like(mel_db, dtype=np.float32)
+        
+    mel_db = np.clip(mel_db, 0.0, 1.0)
+    
+    if mel_db.shape[1] < n_frames:
+        mel_db = np.pad(mel_db, ((0, 0), (0, n_frames - mel_db.shape[1])), mode="constant")
+    elif mel_db.shape[1] > n_frames:
+        mel_db = mel_db[:, :n_frames]
+        
+    # ONNX expects (batch, channel, mels, time_steps) -> (1, 1, 128, 63)
+    input_data = np.expand_dims(np.expand_dims(mel_db, axis=0), axis=0)
     return input_data.astype(np.float32)
 
 def load_labels(labels_path=None):
@@ -89,9 +135,15 @@ def infer_audio(model_path, audio_path, labels_path=None):
 
     probabilities = {label: float(probability) for label, probability in zip(labels, probs)}
     cry_index = labels.index("cry")
+    
+    # MẸO TĂNG ĐỘ NHẠY (RECALL): Hạ ngưỡng threshold xuống 0.25 thay vì 0.5 (argmax)
+    # Vì False Positive của ta rất thấp (chỉ 1 ca), ta có quyền bắt nhạy hơn để không bỏ sót bé nào!
+    threshold = 0.25
+    is_crying_detected = bool(probs[cry_index] > threshold)
+    
     return {
         "file": str(audio_path),
-        "is_crying": bool(cry_index == int(np.argmax(probs))),
+        "is_crying": is_crying_detected,
         "confidence": float(probs[cry_index]),
         "probabilities": probabilities,
     }

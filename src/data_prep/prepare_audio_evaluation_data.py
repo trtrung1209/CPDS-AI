@@ -88,6 +88,8 @@ def prepare_audio_evaluation_data(output_dir: Path, cache_dir: Path, samples_per
 
     cry_cache, esc50_cache = cache_dir / "donateacry-corpus", cache_dir / "ESC-50"
     cache_dir.mkdir(parents=True, exist_ok=True)
+    
+    print("[INFO] Đang kéo bộ dữ liệu (hàng ngàn audio) từ Github, không cần tài khoản...")
     clone_if_missing(CRY_REPOSITORY, cry_cache)
     clone_if_missing(ESC50_REPOSITORY, esc50_cache)
 
@@ -97,21 +99,19 @@ def prepare_audio_evaluation_data(output_dir: Path, cache_dir: Path, samples_per
         
     cry_source = sorted([p for p in cry_cache.rglob("*") if p.suffix.lower() in CRY_EXTENSIONS])
     if not cry_source:
-        raise ValueError("Donate-a-cry contains no audio files.")
+        raise ValueError("Donate-a-cry dataset contains no audio files.")
     
-    # Lấy 8 file âm thanh khóc mẫu từ Donate-a-cry (Chọn các file đã được verify tốt)
-    # Vì file ở Local không có AST nên ta dùng seed ngẫu nhiên nhưng fix cứng để lấy file chuẩn
+    # Lấy TẤT CẢ file khóc từ Github thay vì bị giới hạn 8 file
     import random
     rng = random.Random(999) 
     shuffled_cry = list(cry_source)
     rng.shuffle(shuffled_cry)
     
-    selected_cry = shuffled_cry[:min(samples_per_class, EVAL_HOLDOUT_PER_CLASS)]
+    selected_cry = shuffled_cry[:samples_per_class]
 
     noise_source = [audio_dir / row["filename"] for row in rows if row["category"] in NOISE_CATEGORIES]
-    # For noise, we have many categories, we can hold out EVAL_HOLDOUT_PER_CLASS per category, but for simplicity we hold out proportionally
-    noise_holdout, _noise_train_pool = split_holdout_and_train_pool(noise_source, seed, EVAL_HOLDOUT_PER_CLASS * len(NOISE_CATEGORIES))
-    selected_noise = noise_holdout[:min(len(selected_cry), len(noise_holdout))]
+    noise_holdout, _noise_train_pool = split_holdout_and_train_pool(noise_source, seed, len(noise_source))
+    selected_noise = noise_holdout[:min(len(selected_cry), samples_per_class)]
 
     cry_output, noise_output = output_dir / "cry", output_dir / "noise"
     cry_output.mkdir(parents=True, exist_ok=True)

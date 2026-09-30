@@ -31,6 +31,8 @@ share/python-wheels/
 MANIFEST
 
 # Data and models
+test_mic_simulation.py
+debug_audio/
 data/
 runs/
 child-adult-detection-*/
