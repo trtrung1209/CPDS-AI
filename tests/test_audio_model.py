@@ -26,7 +26,7 @@ def test_missing_audio_file_fails_before_importing_ml_dependency(tmp_path):
 
 def test_preprocess_audio_has_stable_onnx_shape_and_normalization(monkeypatch, tmp_path):
     fake_librosa = ModuleType("librosa")
-    fake_librosa.load = lambda path, sr, duration: (np.array([0.5, -0.5], dtype=np.float32), sr)
+    fake_librosa.load = lambda path, sr, **kwargs: (np.array([0.5, -0.5], dtype=np.float32), sr)
     fake_librosa.feature = type(
         "Feature", (), {"melspectrogram": staticmethod(lambda **_kwargs: np.array([[2.0, 4.0], [6.0, 8.0]]))}
     )()
@@ -38,7 +38,7 @@ def test_preprocess_audio_has_stable_onnx_shape_and_normalization(monkeypatch, t
 
     result = preprocess_audio(audio_path, sr=4, duration=1.0)
 
-    assert result.shape == (1, 1, 2, 2)
+    assert result.shape == (1, 1, 2, 63)
     assert result.dtype == np.float32
     assert result.min() == pytest.approx(0.0)
     assert result.max() == pytest.approx(1.0)
