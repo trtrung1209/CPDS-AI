@@ -34,7 +34,10 @@ MANIFEST
 clean_test_data.py
 test_mic_simulation.py
 debug_audio/
-data/
+data/*
+!data/models/
+data/models/*
+!data/models/*.py
 runs/
 child-adult-detection-*/
 *.pt
@@ -48,6 +51,10 @@ venv/
 env/
 .env
 .env.*
+
+# Logs and outputs
+texput.log
+repopack-output.txt
 !.env.example
 .venv
 ENV/
