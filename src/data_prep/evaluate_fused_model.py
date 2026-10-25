@@ -15,6 +15,9 @@ def evaluate_fused_model(
     vision_test_dir: Path,
     audio_test_dir: Path,
     output_dir: Path | None = None,
+    vision_threshold: float = 0.30,
+    cry_threshold: float = 0.70,
+    adult_threshold: float = 0.75,
 ) -> Dict[str, Any]:
     """Dynamically construct dual-modal test cases and evaluate the full pipeline."""
     random.seed(42)
@@ -77,15 +80,27 @@ def evaluate_fused_model(
                 audio_path=s["audio"],
                 vision_model=str(vision_model),
                 audio_model=str(audio_model),
+                vision_threshold=vision_threshold,
+                cry_threshold=cry_threshold,
+                adult_threshold=adult_threshold,
                 save_log=False,
             )
         except TypeError:
-            res = run_dual(
-                image_path=s["image"],
-                audio_path=s["audio"],
-                vision_model=str(vision_model),
-                audio_model=str(audio_model),
-            )
+            try:
+                res = run_dual(
+                    image_path=s["image"],
+                    audio_path=s["audio"],
+                    vision_model=str(vision_model),
+                    audio_model=str(audio_model),
+                    save_log=False,
+                )
+            except TypeError:
+                res = run_dual(
+                    image_path=s["image"],
+                    audio_path=s["audio"],
+                    vision_model=str(vision_model),
+                    audio_model=str(audio_model),
+                )
         
         triggered = res["alarm_triggered"]
         if triggered == s["expected_alarm"]:

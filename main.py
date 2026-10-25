@@ -221,7 +221,16 @@ def mode_evaluate() -> None:
     
     print("\n--- STEP 4: EVALUATING FUSED PIPELINE ---")
     from src.data_prep.evaluate_fused_model import evaluate_fused_model
-    fused_report = evaluate_fused_model(VISION_MODEL, AUDIO_MODEL, vision_test_dir, audio_test_dir, output_dir=report_dir)
+    fused_report = evaluate_fused_model(
+        VISION_MODEL,
+        AUDIO_MODEL,
+        vision_test_dir,
+        audio_test_dir,
+        output_dir=report_dir,
+        vision_threshold=float(config.get("vision", {}).get("confidence_threshold", 0.30)),
+        cry_threshold=float(config.get("audio", {}).get("confidence_threshold", 0.70)),
+        adult_threshold=float(config.get("fused", {}).get("adult_threshold", 0.75)),
+    )
     print(f"  Scenarios: {fused_report['total_scenarios']} | FNR: {fused_report['false_negative_rate']:.4f}")
     
     # Check Verdict

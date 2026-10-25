@@ -24,19 +24,31 @@ def infer_audio(*args, **kwargs):
     from src.inference.verify_audio import infer_audio as implementation
     return implementation(*args, **kwargs)
 
-def should_trigger_alarm(vision_result, audio_result, vision_threshold, cry_threshold):
+def should_trigger_alarm(
+    vision_result,
+    audio_result,
+    vision_threshold=DEFAULT_VISION_THRESHOLD,
+    cry_threshold=DEFAULT_CRY_THRESHOLD,
+    adult_threshold=0.75,
+):
     """
     Trigger alarm if:
     1. Child is detected confidently (regardless of sound)
     OR
     2. Crying is heard confidently.
     BUT suppress the alarm if an Adult is detected (Safe mode).
+    Suppression requires high confidence adult detection (>= adult_threshold).
     """
-    has_child = vision_result.get("child_detected", False) and vision_result.get("child_confidence", vision_result.get("confidence", 0.0)) >= vision_threshold
-    has_adult = vision_result.get("adult_detected", False) and vision_result.get("adult_confidence", 0.0) >= vision_threshold
-    has_cry = audio_result["is_crying"] and audio_result["confidence"] >= cry_threshold
+    child_conf = vision_result.get("child_confidence", vision_result.get("confidence", 0.0))
+    adult_conf = vision_result.get("adult_confidence", 0.0)
+    
+    has_child = vision_result.get("child_detected", False) and child_conf >= vision_threshold
+    has_adult = vision_result.get("adult_detected", False) and adult_conf >= adult_threshold
+    has_cry = audio_result.get("is_crying", False) and audio_result.get("confidence", 0.0) >= cry_threshold
     
     if has_adult:
+        if has_child and child_conf > adult_conf:
+            return True
         return False
         
     return has_child or has_cry
@@ -50,6 +62,7 @@ def run(
     audio_labels=None,
     vision_threshold=DEFAULT_VISION_THRESHOLD,
     cry_threshold=DEFAULT_CRY_THRESHOLD,
+    adult_threshold=0.75,
     output_dir=None,
     save_log=True,
 ):
@@ -65,7 +78,9 @@ def run(
     final_result = {
         "vision": vision_result,
         "audio": audio_result,
-        "alarm_triggered": should_trigger_alarm(vision_result, audio_result, vision_threshold, cry_threshold),
+        "alarm_triggered": should_trigger_alarm(
+            vision_result, audio_result, vision_threshold, cry_threshold, adult_threshold
+        ),
         "thresholds": {"vision": vision_threshold, "cry": cry_threshold},
     }
 

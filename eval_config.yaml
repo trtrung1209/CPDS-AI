@@ -2,8 +2,11 @@ thresholds:
   vision:
     child_recall: 0.90
     min_test_samples: 100
+    confidence_threshold: 0.30
   audio:
     cry_recall: 0.95
     min_test_samples: 8
+    confidence_threshold: 0.70
   fused:
     false_negative_rate: 0.10
+    adult_threshold: 0.75
