@@ -34,10 +34,7 @@ MANIFEST
 clean_test_data.py
 test_mic_simulation.py
 debug_audio/
-data/*
-!data/models/
-data/models/*
-!data/models/*.py
+data/
 runs/
 child-adult-detection-*/
 *.pt
@@ -45,6 +42,7 @@ child-adult-detection-*/
 *.rknn
 *.tflite
 *.pb
+check*.onnx
 
 # Virtual Environments
 venv/

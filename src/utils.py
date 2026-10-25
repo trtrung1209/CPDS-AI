@@ -1,9 +1,9 @@
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-def get_next_run_dir(base_dir="runs"):
+def get_next_run_dir(base_dir="test_reports"):
     """
-    Finds the next available run directory (e.g., runs/run1, runs/run2).
+    Finds the next available run directory (e.g., test_reports/run1, test_reports/run2).
     Creates the directory and returns its Path.
     """
     base_path = Path(base_dir)

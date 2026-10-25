@@ -35,10 +35,15 @@ def evaluate_vision_model(model_path: Path, test_dir: Path, output_dir: Path = N
     model = YOLO(str(model_path), task="detect")
     
     print("[INFO] Running Ultralytics validation for mAP metrics...")
-    if output_dir:
-        val_metrics = model.val(data=str(data_yaml), device="cpu", verbose=False, project=str(output_dir), name="vision_details", exist_ok=True)
-    else:
-        val_metrics = model.val(data=str(data_yaml), device="cpu", verbose=False)
+    target_output_dir = Path(output_dir) if output_dir else Path("test_reports")
+    val_metrics = model.val(
+        data=str(data_yaml),
+        device="cpu",
+        verbose=False,
+        project=str(target_output_dir),
+        name="vision_details",
+        exist_ok=True,
+    )
     
     # We must explicitly find all child instances and check if the model missed them.
     # We assume class 1 is 'child' based on our data.yaml.
