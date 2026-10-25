@@ -42,7 +42,8 @@ def test_check_alarm_staleness(mock_save, client):
     client._check_alarm()
     assert client.alarm_state is False
     
-def test_check_alarm_thresholds(client):
+@patch("src.daemon.client.save_result")
+def test_check_alarm_thresholds(mock_save, client):
     client.vision_time = time.time()
     client.audio_time = time.time()
     
