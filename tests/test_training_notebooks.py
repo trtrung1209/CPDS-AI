@@ -55,6 +55,16 @@ def test_vision_notebook_uses_requested_small_model_focal_loss_and_fp32_export()
     assert "int8=" not in export_call
 
 
+def test_vision_notebook_pins_numpy_and_ultralytics_without_unpinned_reinstall():
+    notebook = json.loads((PROJECT_ROOT / "notebooks" / "02_vision_training.ipynb").read_text(encoding="utf-8"))
+    install_cell = "".join(notebook["cells"][1]["source"])
+
+    assert '\"numpy==1.26.4\"' in install_cell
+    assert '\"ultralytics==8.2.70\"' in install_cell
+    assert "pip install -q ultralytics " not in install_cell
+    assert "Restart the notebook session/kernel" in install_cell
+
+
 def test_audio_notebook_downloads_esc50_and_excludes_crying_baby():
     source = notebook_source("01_audio_training.ipynb")
 
