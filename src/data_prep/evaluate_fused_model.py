@@ -71,13 +71,21 @@ def evaluate_fused_model(
     print(f"[INFO] Running Fused Inference Evaluation on {len(scenarios)} generated pairs...")
     
     for s in scenarios:
-        res = run_dual(
-            image_path=s["image"],
-            audio_path=s["audio"],
-            vision_model=str(vision_model),
-            audio_model=str(audio_model),
-            save_log=False,
-        )
+        try:
+            res = run_dual(
+                image_path=s["image"],
+                audio_path=s["audio"],
+                vision_model=str(vision_model),
+                audio_model=str(audio_model),
+                save_log=False,
+            )
+        except TypeError:
+            res = run_dual(
+                image_path=s["image"],
+                audio_path=s["audio"],
+                vision_model=str(vision_model),
+                audio_model=str(audio_model),
+            )
         
         triggered = res["alarm_triggered"]
         if triggered == s["expected_alarm"]:

@@ -76,7 +76,7 @@ def mock_audio_test_dir(tmp_path):
 @patch("src.data_prep.evaluate_fused_model.run_dual")
 def test_evaluate_fused_model_calculates_fnr(mock_run_dual, mock_vision_test_dir, mock_audio_test_dir):
     # Mock run_dual to always return no alarm (triggering False Negative for the Child+Cry case)
-    def side_effect(image_path, audio_path, vision_model, audio_model):
+    def side_effect(image_path, audio_path, vision_model, audio_model, *args, **kwargs):
         return {
             "alarm_triggered": False,
             "vision": {"child_detected": True, "confidence": 0.8},
