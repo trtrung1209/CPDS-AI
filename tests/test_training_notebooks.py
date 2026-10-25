@@ -25,6 +25,10 @@ def test_vision_export_uses_training_result_not_a_hard_coded_runs_path():
     assert "best_weights = run_dir / \"weights\" / \"best.pt\"" in source
     assert "artifacts_dir / \"yolov8s-adult-child.onnx\"" in source
     assert "onnx.checker.check_model" in source
+    assert 'results_csv = Path(best_weights).parent.parent / "results.csv"' in source
+    assert "Expected opset 12" in source
+    assert "Expected output shape [1, 6, 8400]" in source
+    assert 'artifacts_dir / "yolov8n-adult-child.onnx"' not in source
 
 
 def test_vision_notebook_uses_requested_small_model_focal_loss_and_fp32_export():
@@ -63,6 +67,31 @@ def test_vision_notebook_pins_numpy_and_ultralytics_without_unpinned_reinstall()
     assert '\"ultralytics==8.2.70\"' in install_cell
     assert "pip install -q ultralytics " not in install_cell
     assert "Restart the notebook session/kernel" in install_cell
+
+
+def test_vision_export_forces_legacy_torch_onnx_exporter():
+    source = notebook_source("02_vision_training.ipynb")
+    export_cell = source.split("original_torch_onnx_export = torch.onnx.export", 1)[1]
+
+    assert 'kwargs["dynamo"] = False' in export_cell
+    assert "torch.onnx.export = export_with_legacy_onnx" in export_cell
+    assert "torch.onnx.export = original_torch_onnx_export" in export_cell
+    assert 'opset=12' in export_cell
+
+
+def test_vision_notebook_clears_cached_raytune_callbacks_before_training_imports():
+    notebook = json.loads((PROJECT_ROOT / "notebooks" / "02_vision_training.ipynb").read_text(encoding="utf-8"))
+    training_cell = next(
+        "".join(cell.get("source", []))
+        for cell in notebook["cells"]
+        if cell["cell_type"] == "code" and "model.train(" in "".join(cell.get("source", []))
+    )
+
+    assert training_cell.index('settings.update({"raytune": False})') < training_cell.index("rt.callbacks.clear()")
+    assert training_cell.index("rt.callbacks.clear()") < training_cell.index("from ultralytics import YOLO")
+    assert 'raise RuntimeError("Failed to disable cached Ultralytics Ray Tune callbacks.")' in training_cell
+    assert "except Exception:" not in training_cell
+    assert "rt.on_fit_epoch_end" not in training_cell
 
 
 def test_audio_notebook_downloads_esc50_and_excludes_crying_baby():

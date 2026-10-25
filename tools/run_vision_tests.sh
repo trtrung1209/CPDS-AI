@@ -5,7 +5,11 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/shell_helpers.sh"
 require_project_venv
 cd "$PROJECT_ROOT"
 
-MODEL_PATH="data/models/yolov8n-adult-child.onnx"
+if [[ -f "data/models/yolov8s-adult-child.onnx" ]]; then
+    MODEL_PATH="data/models/yolov8s-adult-child.onnx"
+else
+    MODEL_PATH="data/models/yolov8n-adult-child.onnx"
+fi
 RUN_CAMERA=false
 IMAGE_PATH=""
 REPORT_DIR="$(next_report_dir)"

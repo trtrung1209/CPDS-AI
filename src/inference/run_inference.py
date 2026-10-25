@@ -77,10 +77,11 @@ def run(
     return final_result
 
 if __name__ == "__main__":
+    default_vision = "data/models/yolov8s-adult-child.onnx" if Path("data/models/yolov8s-adult-child.onnx").is_file() else "data/models/yolov8n-adult-child.onnx"
     parser = argparse.ArgumentParser(description="Run CPDS-AI Inference")
     parser.add_argument("--image", required=True, help="Path to input image")
     parser.add_argument("--audio", required=True, help="Path to input audio")
-    parser.add_argument("--vision-model", default="data/models/yolov8n-adult-child.onnx", help="Path to vision ONNX model")
+    parser.add_argument("--vision-model", default=default_vision, help="Path to vision ONNX model")
     parser.add_argument("--audio-model", default="data/models/audio_model.onnx", help="Path to audio ONNX model")
     parser.add_argument("--audio-labels", help="Optional path to audio_labels.json exported by training")
     parser.add_argument("--vision-threshold", type=float, default=DEFAULT_VISION_THRESHOLD, help="Minimum child confidence")
