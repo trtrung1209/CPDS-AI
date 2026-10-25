@@ -167,7 +167,7 @@ def convert(
 def get_default_models() -> tuple[Path, Path]:
     v8s_onnx = PROJECT_ROOT / "data" / "models" / "yolov8s-adult-child.onnx"
     v8n_onnx = PROJECT_ROOT / "data" / "models" / "yolov8n-adult-child.onnx"
-    chosen_onnx = v8s_onnx if v8s_onnx.is_file() else v8n_onnx
+    chosen_onnx = v8n_onnx if v8n_onnx.is_file() else v8s_onnx
     chosen_rknn = chosen_onnx.with_suffix(".rknn")
     return chosen_onnx, chosen_rknn
 

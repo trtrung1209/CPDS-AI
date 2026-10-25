@@ -92,7 +92,7 @@ def run(
     return final_result
 
 if __name__ == "__main__":
-    default_vision = "data/models/yolov8s-adult-child.onnx" if Path("data/models/yolov8s-adult-child.onnx").is_file() else "data/models/yolov8n-adult-child.onnx"
+    default_vision = "data/models/yolov8n-adult-child.onnx" if Path("data/models/yolov8n-adult-child.onnx").is_file() else "data/models/yolov8s-adult-child.onnx"
     parser = argparse.ArgumentParser(description="Run CPDS-AI Inference")
     parser.add_argument("--image", required=True, help="Path to input image")
     parser.add_argument("--audio", required=True, help="Path to input audio")

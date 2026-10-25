@@ -3,7 +3,7 @@ from pathlib import Path
 
 class Config:
     def __init__(self):
-        default_vision = "data/models/yolov8s-adult-child.onnx" if Path("data/models/yolov8s-adult-child.onnx").is_file() else "data/models/yolov8n-adult-child.onnx"
+        default_vision = "data/models/yolov8n-adult-child.onnx" if Path("data/models/yolov8n-adult-child.onnx").is_file() else "data/models/yolov8s-adult-child.onnx"
         self.vision_model_path = os.environ.get("CPDS_VISION_MODEL", default_vision)
         self.audio_model_path = os.environ.get("CPDS_AUDIO_MODEL", "data/models/audio_model.onnx")
         self.audio_labels_path = os.environ.get("CPDS_AUDIO_LABELS", "")

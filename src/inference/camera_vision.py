@@ -100,7 +100,7 @@ def run_camera(model_path, source="0"):
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":  # pragma: no cover
-    default_vision = "data/models/yolov8s-adult-child.onnx" if Path("data/models/yolov8s-adult-child.onnx").is_file() else "data/models/yolov8n-adult-child.onnx"
+    default_vision = "data/models/yolov8n-adult-child.onnx" if Path("data/models/yolov8n-adult-child.onnx").is_file() else "data/models/yolov8s-adult-child.onnx"
     parser = argparse.ArgumentParser(description="Run inference with a YOLOv8 ONNX model on webcam, video, or image.")
     parser.add_argument("--model", default=default_vision, help="Path to vision ONNX model")
     parser.add_argument("--source", type=str, default="0", help="Camera index (e.g. 0) or path to video/image file")
