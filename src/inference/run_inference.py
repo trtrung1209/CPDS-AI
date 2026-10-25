@@ -70,7 +70,7 @@ def run(
     }
 
     if save_log:
-        target_dir = output_dir or get_next_run_dir("runs")
+        target_dir = output_dir or get_next_run_dir()
         print(f"Saving results to {target_dir}...")
         save_result(target_dir, "inference_log.json", json.dumps(final_result, indent=4))
         print("Inference completed successfully!")

@@ -60,7 +60,7 @@ def verify_vision_model(model_path, image_path):
     import cv2
 
     vision_result, result = infer_vision(model_path, image_path)
-    run_dir = get_next_run_dir("runs")
+    run_dir = get_next_run_dir()
     output_image_path = run_dir / "verified_output.jpg"
     if not cv2.imwrite(str(output_image_path), result.plot()):
         raise OSError(f"Could not save annotated image: {output_image_path}")

@@ -133,7 +133,7 @@ class WatchClient:
                         "audio": self.latest_audio,
                         "alarm_triggered": alarm
                     }
-                    save_result(get_next_run_dir("runs"), "daemon_log.json", json.dumps(log_data, indent=2))
+                    save_result(get_next_run_dir(), "daemon_log.json", json.dumps(log_data, indent=2))
             else:
                 self._trigger_gpio(False)
 

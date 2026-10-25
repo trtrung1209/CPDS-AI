@@ -152,7 +152,7 @@ def infer_audio(model_path, audio_path, labels_path=None):
 def verify_audio_model(model_path, audio_path, labels_path=None):
     """Run audio inference, save the result and return it."""
     output_json = infer_audio(model_path, audio_path, labels_path)
-    run_dir = get_next_run_dir("runs")
+    run_dir = get_next_run_dir()
     save_result(run_dir, "audio_verified.json", json.dumps(output_json, indent=4))
     print(json.dumps(output_json, indent=4))
     print(f"Saved to: {run_dir}/audio_verified.json")
