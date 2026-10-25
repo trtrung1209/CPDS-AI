@@ -23,8 +23,36 @@ def test_vision_export_uses_training_result_not_a_hard_coded_runs_path():
 
     assert "results.save_dir" in source
     assert "best_weights = run_dir / \"weights\" / \"best.pt\"" in source
-    assert "artifacts_dir / \"yolov8n-adult-child.onnx\"" in source
+    assert "artifacts_dir / \"yolov8s-adult-child.onnx\"" in source
     assert "onnx.checker.check_model" in source
+
+
+def test_vision_notebook_uses_requested_small_model_focal_loss_and_fp32_export():
+    source = notebook_source("02_vision_training.ipynb")
+
+    assert 'YOLO("yolov8s.pt")' in source
+    assert "cls=1.2" in source
+    assert "FL_GAMMA = 1.5" in source
+    assert "criterion.bce = FocalBCEWithLogitsLoss(gamma=FL_GAMMA)" in source
+    assert "DetectionModel.init_criterion = original_init_criterion" in source
+    for setting in (
+        "copy_paste=0.30",
+        "mosaic=1.0",
+        "mixup=0.15",
+        "erasing=0.40",
+        "scale=0.5",
+        "close_mosaic=10",
+    ):
+        assert setting in source
+
+    export_call = source.split("best_model.export(", 1)[1].split("))", 1)[0]
+    assert 'format="onnx"' in export_call
+    assert "imgsz=640" in export_call
+    assert "opset=12" in export_call
+    assert "dynamic=False" in export_call
+    assert "simplify=True" in export_call
+    assert "half=False" in export_call
+    assert "int8=" not in export_call
 
 
 def test_audio_notebook_downloads_esc50_and_excludes_crying_baby():

@@ -164,19 +164,28 @@ def convert(
     return 0
 
 
+def get_default_models() -> tuple[Path, Path]:
+    v8s_onnx = PROJECT_ROOT / "data" / "models" / "yolov8s-adult-child.onnx"
+    v8n_onnx = PROJECT_ROOT / "data" / "models" / "yolov8n-adult-child.onnx"
+    chosen_onnx = v8s_onnx if v8s_onnx.is_file() else v8n_onnx
+    chosen_rknn = chosen_onnx.with_suffix(".rknn")
+    return chosen_onnx, chosen_rknn
+
+
 def main() -> int:
+    default_onnx, default_rknn = get_default_models()
     parser = argparse.ArgumentParser(description="Convert YOLOv8 ONNX model to RKNN for Rockchip NPU.")
     parser.add_argument(
         "--onnx",
         type=Path,
-        default=PROJECT_ROOT / "data" / "models" / "yolov8n-adult-child.onnx",
-        help="Input ONNX model path (default: data/models/yolov8n-adult-child.onnx)",
+        default=default_onnx,
+        help=f"Input ONNX model path (default: {default_onnx.name})",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=PROJECT_ROOT / "data" / "models" / "yolov8n-adult-child.rknn",
-        help="Output RKNN model path (default: data/models/yolov8n-adult-child.rknn)",
+        default=default_rknn,
+        help=f"Output RKNN model path (default: {default_rknn.name})",
     )
     parser.add_argument(
         "--target",

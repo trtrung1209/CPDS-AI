@@ -9,7 +9,13 @@ from typing import Any, Dict
 from src.inference.run_inference import run as run_dual
 
 
-def evaluate_fused_model(vision_model: Path, audio_model: Path, vision_test_dir: Path, audio_test_dir: Path) -> Dict[str, Any]:
+def evaluate_fused_model(
+    vision_model: Path,
+    audio_model: Path,
+    vision_test_dir: Path,
+    audio_test_dir: Path,
+    output_dir: Path | None = None,
+) -> Dict[str, Any]:
     """Dynamically construct dual-modal test cases and evaluate the full pipeline."""
     random.seed(42)
     
@@ -69,7 +75,8 @@ def evaluate_fused_model(vision_model: Path, audio_model: Path, vision_test_dir:
             image_path=s["image"],
             audio_path=s["audio"],
             vision_model=str(vision_model),
-            audio_model=str(audio_model)
+            audio_model=str(audio_model),
+            save_log=False,
         )
         
         triggered = res["alarm_triggered"]
@@ -99,6 +106,9 @@ def evaluate_fused_model(vision_model: Path, audio_model: Path, vision_test_dir:
         "false_positive_rate": float(fpr),
         "failures": failures
     }
+    if output_dir:
+        out_path = Path(output_dir) / "fused_details.json"
+        out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     return report
 
 

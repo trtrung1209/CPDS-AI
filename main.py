@@ -30,7 +30,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-VISION_MODEL = PROJECT_ROOT / "data" / "models" / "yolov8n-adult-child.onnx"
+# Support both YOLOv8s and YOLOv8n seamlessly
+VISION_MODEL_S = PROJECT_ROOT / "data" / "models" / "yolov8s-adult-child.onnx"
+VISION_MODEL_N = PROJECT_ROOT / "data" / "models" / "yolov8n-adult-child.onnx"
+VISION_MODEL = VISION_MODEL_S if VISION_MODEL_S.is_file() else VISION_MODEL_N
 AUDIO_MODEL = PROJECT_ROOT / "data" / "models" / "audio_model.onnx"
 
 BANNER = r"""
@@ -218,7 +221,7 @@ def mode_evaluate() -> None:
     
     print("\n--- STEP 4: EVALUATING FUSED PIPELINE ---")
     from src.data_prep.evaluate_fused_model import evaluate_fused_model
-    fused_report = evaluate_fused_model(VISION_MODEL, AUDIO_MODEL, vision_test_dir, audio_test_dir)
+    fused_report = evaluate_fused_model(VISION_MODEL, AUDIO_MODEL, vision_test_dir, audio_test_dir, output_dir=report_dir)
     print(f"  Scenarios: {fused_report['total_scenarios']} | FNR: {fused_report['false_negative_rate']:.4f}")
     
     # Check Verdict

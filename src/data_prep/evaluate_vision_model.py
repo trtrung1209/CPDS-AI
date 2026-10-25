@@ -32,14 +32,20 @@ def evaluate_vision_model(model_path: Path, test_dir: Path, output_dir: Path = N
         raise FileNotFoundError(f"data.yaml is required in the test dataset: {data_yaml}")
 
     from ultralytics import YOLO
+    try:
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        device = "cpu"
+
     model = YOLO(str(model_path), task="detect")
     
-    print("[INFO] Running Ultralytics validation for mAP metrics...")
+    print(f"[INFO] Running Ultralytics validation on {device.upper()} for mAP metrics (969 test images)...")
     target_output_dir = Path(output_dir) if output_dir else Path("test_reports")
     val_metrics = model.val(
         data=str(data_yaml),
-        device="cpu",
-        verbose=False,
+        device=device,
+        verbose=True,
         project=str(target_output_dir),
         name="vision_details",
         exist_ok=True,
@@ -55,8 +61,17 @@ def evaluate_vision_model(model_path: Path, test_dir: Path, output_dir: Path = N
     child_samples = 0
     missed_children = []
     
+    try:
+        from tqdm import tqdm
+        has_tqdm = True
+    except ImportError:
+        has_tqdm = False
+
+    all_images = sorted(images_dir.glob("*.jpg"))
+    iterator = tqdm(all_images, desc="[INFO] False Negative Analysis") if has_tqdm else all_images
+
     print("[INFO] Running manual inference for detailed False Negative analysis...")
-    for img_path in sorted(images_dir.glob("*.jpg")):
+    for img_path in iterator:
         label_path = labels_dir / f"{img_path.stem}.txt"
         gt_boxes = parse_yolo_label(label_path)
         

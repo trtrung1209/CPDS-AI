@@ -50,12 +50,15 @@ def run(
     audio_labels=None,
     vision_threshold=DEFAULT_VISION_THRESHOLD,
     cry_threshold=DEFAULT_CRY_THRESHOLD,
+    output_dir=None,
+    save_log=True,
 ):
     """Run both real ONNX models and persist a single alarm decision."""
     if not 0.0 <= vision_threshold <= 1.0 or not 0.0 <= cry_threshold <= 1.0:
         raise ValueError("Confidence thresholds must be between 0.0 and 1.0.")
 
-    print("Starting CPDS-AI Inference...")
+    if save_log:
+        print("Starting CPDS-AI Inference...")
 
     vision_result, _ = infer_vision(vision_model, image_path)
     audio_result = infer_audio(audio_model, audio_path, audio_labels)
@@ -66,10 +69,11 @@ def run(
         "thresholds": {"vision": vision_threshold, "cry": cry_threshold},
     }
 
-    run_dir = get_next_run_dir()
-    print(f"Saving results to {run_dir}...")
-    save_result(run_dir, "inference_log.json", json.dumps(final_result, indent=4))
-    print("Inference completed successfully!")
+    if save_log:
+        target_dir = output_dir or get_next_run_dir()
+        print(f"Saving results to {target_dir}...")
+        save_result(target_dir, "inference_log.json", json.dumps(final_result, indent=4))
+        print("Inference completed successfully!")
     return final_result
 
 if __name__ == "__main__":
