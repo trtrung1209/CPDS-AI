@@ -33,7 +33,7 @@ if str(PROJECT_ROOT) not in sys.path:
 # Support both YOLOv8s and YOLOv8n seamlessly
 VISION_MODEL_S = PROJECT_ROOT / "data" / "models" / "yolov8s-adult-child.onnx"
 VISION_MODEL_N = PROJECT_ROOT / "data" / "models" / "yolov8n-adult-child.onnx"
-VISION_MODEL = VISION_MODEL_S if VISION_MODEL_S.is_file() else VISION_MODEL_N
+VISION_MODEL = VISION_MODEL_N if VISION_MODEL_N.is_file() else VISION_MODEL_S
 AUDIO_MODEL = PROJECT_ROOT / "data" / "models" / "audio_model.onnx"
 
 BANNER = r"""
